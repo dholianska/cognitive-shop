@@ -1,17 +1,17 @@
-# ERD-діаграми
+# ERD-РґС–Р°РіСЂР°РјРё
 
-Позначки: PK - первинний ключ, FK - зовнішній ключ, UK - унікальне значення.
-Між базами немає жодних FOREIGN KEY: `Products.Id` у БД Замовлень - це звичайний
-стовпець (локальна копія довідника з Каталогу, той самий Id).
+РџРѕР·РЅР°С‡РєРё: PK - РїРµСЂРІРёРЅРЅРёР№ РєР»СЋС‡, FK - Р·РѕРІРЅС–С€РЅС–Р№ РєР»СЋС‡, UK - СѓРЅС–РєР°Р»СЊРЅРµ Р·РЅР°С‡РµРЅРЅСЏ.
+РњС–Р¶ Р±Р°Р·Р°РјРё РЅРµРјР°С” Р¶РѕРґРЅРёС… FOREIGN KEY: `Products.Id` Сѓ Р‘Р” Р—Р°РјРѕРІР»РµРЅСЊ - С†Рµ Р·РІРёС‡Р°Р№РЅРёР№
+СЃС‚РѕРІРїРµС†СЊ (Р»РѕРєР°Р»СЊРЅР° РєРѕРїС–СЏ РґРѕРІС–РґРЅРёРєР° Р· РљР°С‚Р°Р»РѕРіСѓ, С‚РѕР№ СЃР°РјРёР№ Id).
 
-## Проєкт №1: БД Замовлень (SQL Server, ADO.NET + Dapper)
+## РџСЂРѕС”РєС‚ в„–1: Р‘Р” Р—Р°РјРѕРІР»РµРЅСЊ (SQL Server, ADO.NET + Dapper)
 
 ```mermaid
 erDiagram
-    Customers ||--o{ Orders : "1:N - клієнт має багато замовлень"
-    Orders ||--|| OrderDetails : "1:1 - PK деталей є FK на замовлення"
-    Orders ||--o{ OrderItems : "M:N через OrderItems"
-    Products ||--o{ OrderItems : "M:N через OrderItems"
+    Customers ||--o{ Orders : "1:N - РєР»С–С”РЅС‚ РјР°С” Р±Р°РіР°С‚Рѕ Р·Р°РјРѕРІР»РµРЅСЊ"
+    Orders ||--|| OrderDetails : "1:1 - PK РґРµС‚Р°Р»РµР№ С” FK РЅР° Р·Р°РјРѕРІР»РµРЅРЅСЏ"
+    Orders ||--o{ OrderItems : "M:N С‡РµСЂРµР· OrderItems"
+    Products ||--o{ OrderItems : "M:N С‡РµСЂРµР· OrderItems"
 
     Customers {
         BIGINT Id PK
@@ -23,7 +23,7 @@ erDiagram
     Orders {
         BIGINT Id PK
         BIGINT CustomerId FK
-        NVARCHAR Status "CHECK: допустимі статуси"
+        NVARCHAR Status "CHECK: РґРѕРїСѓСЃС‚РёРјС– СЃС‚Р°С‚СѓСЃРё"
         DATETIME2 OrderDate
         BIT IsDeleted
         ROWVERSION RowVersion
@@ -36,28 +36,28 @@ erDiagram
     OrderItems {
         BIGINT OrderId "PK, FK"
         BIGINT ProductId "PK, FK"
-        NVARCHAR ProductName "знімок на момент замовлення"
-        DECIMAL UnitPrice "знімок на момент замовлення"
+        NVARCHAR ProductName "Р·РЅС–РјРѕРє РЅР° РјРѕРјРµРЅС‚ Р·Р°РјРѕРІР»РµРЅРЅСЏ"
+        DECIMAL UnitPrice "Р·РЅС–РјРѕРє РЅР° РјРѕРјРµРЅС‚ Р·Р°РјРѕРІР»РµРЅРЅСЏ"
         DECIMAL Discount
         INT Units
     }
     Products {
-        BIGINT Id PK "Id з БД Каталогу, не IDENTITY"
-        NVARCHAR Name "копія, оновлюється подіями"
-        DECIMAL Price "копія, оновлюється подіями"
+        BIGINT Id PK "Id Р· Р‘Р” РљР°С‚Р°Р»РѕРіСѓ, РЅРµ IDENTITY"
+        NVARCHAR Name "РєРѕРїС–СЏ, РѕРЅРѕРІР»СЋС”С‚СЊСЃСЏ РїРѕРґС–СЏРјРё"
+        DECIMAL Price "РєРѕРїС–СЏ, РѕРЅРѕРІР»СЋС”С‚СЊСЃСЏ РїРѕРґС–СЏРјРё"
         INT Stock
         ROWVERSION RowVersion
     }
 ```
 
-## Проєкт №2: БД Каталогу (SQL Server, EF Core Code First)
+## РџСЂРѕС”РєС‚ в„–2: Р‘Р” РљР°С‚Р°Р»РѕРіСѓ (SQL Server, EF Core Code First)
 
 ```mermaid
 erDiagram
-    Products ||--o| ProductDetails : "1:1 - PK деталей є FK на товар"
-    Products ||--o{ ProductImages : "1:N - товар має багато зображень"
-    Products ||--o{ ProductCategories : "M:N через ProductCategories"
-    Categories ||--o{ ProductCategories : "M:N через ProductCategories"
+    Products ||--o| ProductDetails : "1:1 - PK РґРµС‚Р°Р»РµР№ С” FK РЅР° С‚РѕРІР°СЂ"
+    Products ||--o{ ProductImages : "1:N - С‚РѕРІР°СЂ РјР°С” Р±Р°РіР°С‚Рѕ Р·РѕР±СЂР°Р¶РµРЅСЊ"
+    Products ||--o{ ProductCategories : "M:N С‡РµСЂРµР· ProductCategories"
+    Categories ||--o{ ProductCategories : "M:N С‡РµСЂРµР· ProductCategories"
 
     Products {
         INT Id PK
@@ -75,7 +75,7 @@ erDiagram
         INT Id PK
         INT ProductId FK
         NVARCHAR Url
-        INT SortOrder "UNIQUE разом із ProductId"
+        INT SortOrder "UNIQUE СЂР°Р·РѕРј С–Р· ProductId"
     }
     Categories {
         INT Id PK
@@ -84,6 +84,6 @@ erDiagram
     ProductCategories {
         INT ProductId "PK, FK"
         INT CategoryId "PK, FK"
-        DATETIME2 AddedAt "власне поле M:N"
+        DATETIME2 AddedAt "РІР»Р°СЃРЅРµ РїРѕР»Рµ M:N"
     }
 ```
