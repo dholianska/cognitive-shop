@@ -41,4 +41,23 @@ public sealed class ProductRepository : BaseDapperRepository<Product>, IProductR
             throw new NotFoundException($"Product {productId} not found");
         throw new BusinessConflictException($"Not enough stock for product {productId}");
     }
+
+    public async Task IncreaseStockAsync(long productId, int quantity, CancellationToken ct = default)
+    {
+        if (quantity <= 0)
+            throw new ValidationException("Quantity must be positive");
+
+        await EnsureOpenAsync(ct);
+
+        const string sql = @"
+            UPDATE dbo.Products
+            SET Stock = Stock + @Quantity, UpdatedAt = SYSUTCDATETIME()
+            WHERE Id = @ProductId AND IsDeleted = 0";
+
+        var rows = await Connection.ExecuteAsync(new CommandDefinition(
+            sql, new { ProductId = productId, Quantity = quantity }, Transaction, cancellationToken: ct));
+
+        if (rows == 0)
+            throw new NotFoundException($"Product {productId} not found");
+    }
 }

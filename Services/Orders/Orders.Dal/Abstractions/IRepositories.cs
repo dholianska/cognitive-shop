@@ -40,4 +40,6 @@ public interface IProductRepository : IGenericRepository<Product>
 {
     /// <summary>Зменшує залишок. Якщо товару не вистачає, кидає BusinessConflictException.</summary>
     Task DecreaseStockAsync(long productId, int quantity, CancellationToken ct = default);
+    /// <summary>Повертає залишок (скасування підтвердженого замовлення).</summary>
+    Task IncreaseStockAsync(long productId, int quantity, CancellationToken ct = default);
 }

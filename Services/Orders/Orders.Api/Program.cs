@@ -1,6 +1,8 @@
 using Serilog;
 using Orders.Dal;
 using Orders.Dal.Abstractions;
+using Orders.Bll.Mapping;
+using Orders.Bll.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -15,9 +17,24 @@ builder.Host.UseSerilog((ctx, cfg) => cfg
 // Scoped: один Unit of Work (і одне з'єднання з БД) на HTTP-запит
 builder.Services.AddScoped<IUnitOfWork>(_ => new UnitOfWork(connectionString));
 
+builder.Services.AddAutoMapper(cfg =>
+{
+    cfg.LicenseKey = builder.Configuration["AutoMapper:LicenseKey"];
+    cfg.AddProfile<OrderProfile>();
+    cfg.AddProfile<CustomerProfile>();
+    cfg.AddProfile<ProductProfile>();
+});
+
+builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<IOrderService, OrderService>();
+
 builder.Services.AddControllers();
 
 var app = builder.Build();
+
+if (app.Environment.IsDevelopment())
+    app.Services.GetRequiredService<AutoMapper.IConfigurationProvider>().AssertConfigurationIsValid();
 
 app.UseSerilogRequestLogging();
 app.UseHttpsRedirection();
