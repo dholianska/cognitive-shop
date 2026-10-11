@@ -39,13 +39,14 @@ public abstract class BaseDapperRepository<T> : RepositoryBase, IGenericReposito
         return rows.AsList();
     }
 
-    public virtual async Task<long> AddAsync(T entity, CancellationToken ct = default)
+    public virtual Task<long> AddAsync(T entity, CancellationToken ct = default)
+    => GuardValueAsync(async () =>
     {
         await EnsureOpenAsync(ct);
         // Dapper бере значення для параметрів (@Name, @Price...) з властивостей entity
         return await Connection.ExecuteScalarAsync<long>(
             new CommandDefinition(InsertSql, entity, Transaction, cancellationToken: ct));
-    }
+    });
 
     /// <summary>М'яке видалення. Повертає false, якщо активного запису з таким Id немає.</summary>
     public virtual async Task<bool> DeleteAsync(long id, CancellationToken ct = default)

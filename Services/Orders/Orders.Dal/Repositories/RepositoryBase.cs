@@ -25,4 +25,17 @@ public abstract class RepositoryBase
         if (Connection.State != ConnectionState.Open)
             await Connection.OpenAsync(ct);
     }
+
+    /// <summary>Виконує дію й перетворює відомі SqlException на доменні винятки.</summary>
+    protected static async Task GuardAsync(Func<Task> action)
+    {
+        try { await action(); }
+        catch (SqlException ex) when (SqlErrors.TryTranslate(ex, out var domain)) { throw domain; }
+    }
+
+    protected static async Task<T> GuardValueAsync<T>(Func<Task<T>> action)
+    {
+        try { return await action(); }
+        catch (SqlException ex) when (SqlErrors.TryTranslate(ex, out var domain)) { throw domain; }
+    }
 }

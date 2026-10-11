@@ -55,42 +55,46 @@ public sealed class OrderRepository : BaseDapperRepository<Order>, IOrderReposit
         return rows.AsList();
     }
 
-    public async Task AddDetailsAsync(long orderId, string deliveryEmail, string? comment, CancellationToken ct = default)
+    public Task AddDetailsAsync(long orderId, string deliveryEmail, string? comment, CancellationToken ct = default)
+    => GuardAsync(async () =>
     {
         const string sql = @"
-            INSERT dbo.OrderDetails (OrderId, DeliveryEmail, Comment)
-            VALUES (@OrderId, @DeliveryEmail, @Comment)";
+                INSERT dbo.OrderDetails (OrderId, DeliveryEmail, Comment)
+                VALUES (@OrderId, @DeliveryEmail, @Comment)";
 
         await EnsureOpenAsync(ct);
         await Connection.ExecuteAsync(new CommandDefinition(
             sql, new { OrderId = orderId, DeliveryEmail = deliveryEmail, Comment = comment },
             Transaction, cancellationToken: ct));
-    }
+    });
 
-    public async Task AddItemAsync(OrderItem item, CancellationToken ct = default)
-    {
-        const string sql = @"
-            INSERT dbo.OrderItems (OrderId, ProductId, ProductName, UnitPrice, Discount, Units)
-            VALUES (@OrderId, @ProductId, @ProductName, @UnitPrice, @Discount, @Units)";
+    public Task AddItemAsync(OrderItem item, CancellationToken ct = default)
+        => GuardAsync(async () =>
+        {
+            const string sql = @"
+                INSERT dbo.OrderItems (OrderId, ProductId, ProductName, UnitPrice, Discount, Units)
+                VALUES (@OrderId, @ProductId, @ProductName, @UnitPrice, @Discount, @Units)";
 
-        await EnsureOpenAsync(ct);
-        await Connection.ExecuteAsync(new CommandDefinition(sql, item, Transaction, cancellationToken: ct));
-    }
+            await EnsureOpenAsync(ct);
+            await Connection.ExecuteAsync(new CommandDefinition(sql, item, Transaction, cancellationToken: ct));
+        });
 
     /// <summary>Процедура з Лаб. 01: допустимість переходу перевіряє база.</summary>
-    public async Task ConfirmAsync(long orderId, CancellationToken ct = default)
-    {
-        await EnsureOpenAsync(ct);
-        await Connection.ExecuteAsync(new CommandDefinition(
-            "dbo.usp_ConfirmOrder", new { OrderId = orderId }, Transaction,
-            commandType: CommandType.StoredProcedure, cancellationToken: ct));
-    }
+    public Task ConfirmAsync(long orderId, CancellationToken ct = default)
+        => GuardAsync(async () =>
+        {
+            await EnsureOpenAsync(ct);
+            await Connection.ExecuteAsync(new CommandDefinition(
+                "dbo.usp_ConfirmOrder", new { OrderId = orderId }, Transaction,
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        });
 
-    public async Task ChangeStatusAsync(long orderId, string newStatus, CancellationToken ct = default)
-    {
-        await EnsureOpenAsync(ct);
-        await Connection.ExecuteAsync(new CommandDefinition(
-            "dbo.usp_ChangeOrderStatus", new { OrderId = orderId, NewStatus = newStatus }, Transaction,
-            commandType: CommandType.StoredProcedure, cancellationToken: ct));
-    }
+    public Task ChangeStatusAsync(long orderId, string newStatus, CancellationToken ct = default)
+        => GuardAsync(async () =>
+        {
+            await EnsureOpenAsync(ct);
+            await Connection.ExecuteAsync(new CommandDefinition(
+                "dbo.usp_ChangeOrderStatus", new { OrderId = orderId, NewStatus = newStatus }, Transaction,
+                commandType: CommandType.StoredProcedure, cancellationToken: ct));
+        });
 }

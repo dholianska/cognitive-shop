@@ -52,7 +52,8 @@ public sealed class CustomerRepository : RepositoryBase, ICustomerRepository
     }
 
     /// <summary>Викликає процедуру usp_CreateCustomer, яка повертає Id нового клієнта.</summary>
-    public async Task<long> AddAsync(Customer customer, CancellationToken ct = default)
+    public Task<long> AddAsync(Customer customer, CancellationToken ct = default)
+    => GuardValueAsync(async () =>
     {
         await EnsureOpenAsync(ct);
         await using var command = new SqlCommand("dbo.usp_CreateCustomer", Connection, Transaction)
@@ -64,19 +65,19 @@ public sealed class CustomerRepository : RepositoryBase, ICustomerRepository
 
         var id = await command.ExecuteScalarAsync(ct);
         return Convert.ToInt64(id);
-    }
+    });
 
-    /// <summary>Викликає процедуру usp_SoftDeleteCustomer (м'яке видалення).</summary>
-    public async Task SoftDeleteAsync(long id, CancellationToken ct = default)
-    {
-        await EnsureOpenAsync(ct);
-        await using var command = new SqlCommand("dbo.usp_SoftDeleteCustomer", Connection, Transaction)
+    public Task SoftDeleteAsync(long id, CancellationToken ct = default)
+        => GuardAsync(async () =>
         {
-            CommandType = CommandType.StoredProcedure
-        };
-        command.Parameters.Add("@CustomerId", SqlDbType.BigInt).Value = id;
-        await command.ExecuteNonQueryAsync(ct);
-    }
+            await EnsureOpenAsync(ct);
+            await using var command = new SqlCommand("dbo.usp_SoftDeleteCustomer", Connection, Transaction)
+            {
+                CommandType = CommandType.StoredProcedure
+            };
+            command.Parameters.Add("@CustomerId", SqlDbType.BigInt).Value = id;
+            await command.ExecuteNonQueryAsync(ct);
+        });
 
     // ручне мапінг рядка reader -> модель
     private static Customer Map(SqlDataReader reader) => new()
