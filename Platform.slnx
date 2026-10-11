@@ -11,4 +11,5 @@
     <Project Path="Services/Orders/Orders.Dal/Orders.Dal.csproj" />
     <Project Path="Services/Orders/Orders.Domain/Orders.Domain.csproj" />
   </Folder>
+  <Project Path="Platform.AppHost/Platform.AppHost.csproj" />
 </Solution>
