@@ -100,3 +100,93 @@ docker exec mongo1 mongosh ReviewsDb --quiet --eval "db.reviews.find({}, {rating
 | 50001 | не знайдено | 404 |
 | 50002 | конфлікт бізнес-правила (недопустимий перехід) | 409 |
 | 50003 | некоректні вхідні дані | 400 |
+
+
+---
+
+# Лаб. 02: мікросервіс Orders (ADO.NET + Dapper, тришарова архітектура)
+
+## Схема рішення
+```
+Platform.slnx
+├── Platform.AppHost/            оркестрація Aspire: SQL Server + Orders.Api
+└── Services/Orders/
+    ├── Orders.Api/              Web/API: контролери, Program.cs, обробка помилок (ProblemDetails), Swagger
+    ├── Orders.Bll/              сервіси, DTO, профілі AutoMapper, бізнес-валідація
+    ├── Orders.Dal/              репозиторії (ADO.NET + Dapper), Unit of Work
+    └── Orders.Domain/           моделі та доменні винятки
+```
+Залежності йдуть в один бік: **Api -> Bll -> Dal**; `Domain` підключають Dal і Bll.
+Контролер не звертається до репозиторіїв напряму, жоден SQL-запит не виходить за межі `Orders.Dal`.
+
+| Шар | Що містить |
+|---|---|
+| Orders.Dal | `CustomerRepository` (чистий ADO.NET, без Generic Repository); `OrderRepository`, `ProductRepository` (Dapper, спільна база `BaseDapperRepository<T>`); `UnitOfWork` (одне з'єднання й одна транзакція на запит); `SqlErrors` (SqlException -> доменні винятки) |
+| Orders.Bll | `OrderService` (транзакційні операції створення і підтвердження замовлення), `CustomerService`, `ProductService` |
+| Orders.Api | `OrdersController`, `CustomersController`, `ProductsController`; `DomainExceptionHandler` |
+
+Бізнес-операції, що змінюють кілька таблиць в одній транзакції:
+- **створення замовлення**: `Orders` + `OrderDetails` + `OrderItems`; назва й ціна товару копіюються в позицію як знімок (політика дублювання з Лаб. 01);
+- **підтвердження замовлення**: статус -> `StockConfirmed` (процедура `usp_ConfirmOrder`) і зменшення залишку товарів; якщо товару не вистачає, відкочується все, зокрема й статус.
+
+Рівень ізоляції транзакцій: `ReadCommitted` (дивиться `UnitOfWork`). Вищий рівень зменшує аномалії читання, але збільшує блокування й ризик взаємних блокувань. Від втрати оновлень залишок захищають атомарний `UPDATE ... WHERE Stock >= @Quantity` і `UPDLOCK` у процедурах.
+
+## Запуск через Aspire
+
+Потрібні: .NET 9 SDK, Docker Desktop (запущений), SSMS або Visual Studio для застосування SQL-скриптів.
+
+1. Задати пароль SQL Server для Aspire (зберігається в user-secrets, у репозиторії його немає):
+```bash
+   dotnet user-secrets set "Parameters:sql-password" "<ваш_пароль>" --project Platform.AppHost
+```
+   Пароль має відповідати вимогам SQL Server (великі й малі літери, цифри, спецсимвол).
+2. Запустити все однією командою:
+```bash
+   dotnet run --project Platform.AppHost
+```
+   У консолі буде посилання на Aspire Dashboard. У ньому ресурси `sql`, `OrdersDb`, `orders-api` мають статус **Running**.
+3. База створюється порожньою. Підключитися до `127.0.0.1,14330` (логін `sa`, пароль з кроку 1, Trust Server Certificate) і виконати **по черзі** `db/p1/schema.sql`, `db/p1/procedures.sql`, `db/p1/seed.sql`.
+   > Якщо `localhost,14330` не підключається, використайте `127.0.0.1,14330` (`localhost` може перетворюватися на IPv6-адресу).
+4. Адресу API взяти в Dashboard (колонка Endpoints ресурсу `orders-api`), Swagger відкривається за `<адреса>/swagger`.
+
+Рядок підключення: `ConnectionStrings:OrdersDb` в `appsettings.json` лише заглушка. Aspire передає справжній через змінну оточення `ConnectionStrings__OrdersDb` (ім'я ресурсу бази в AppHost збігається з ім'ям рядка підключення), а для запуску API окремо без Aspire його можна задати через `dotnet user-secrets` або змінну оточення.
+
+## Ендпоінти й статуси відповідей
+| Метод і шлях | Успіх | Помилки |
+|---|---|---|
+| `GET /api/customers`, `GET /api/customers/{id}` | 200 | 404 |
+| `POST /api/customers` | 201 + Location | 400 (валідація), 409 (дубль Email) |
+| `DELETE /api/customers/{id}` | 204 | 404, 409 (є незавершені замовлення) |
+| `GET /api/products`, `GET /api/products/{id}` | 200 | 404 |
+| `GET /api/orders?customerId=1`, `GET /api/orders/{id}` | 200 | 404 |
+| `POST /api/orders` | 201 + Location | 400, 404 (клієнт чи товар), 409 (не вистачає товару) |
+| `POST /api/orders/{id}/confirm` | 204 | 404, 409 (недопустимий перехід, брак товару) |
+| `PUT /api/orders/{id}/status` | 204 | 400, 404, 409 (недопустимий перехід) |
+| `DELETE /api/orders/{id}` | 204 | 404, 409 |
+
+Усі помилки повертаються у форматі **ProblemDetails**. Один глобальний обробник (`DomainExceptionHandler`) перетворює винятки: `NotFoundException` -> 404, `BusinessConflictException` -> 409, `ValidationException` -> 400, решта -> 500. Помилки процедур БД проходять ланцюжок: `THROW 5000x` -> `SqlException` -> DAL -> доменний виняток -> HTTP-статус.
+
+## Приклади запитів
+Замініть `{BASE}` на адресу API з Dashboard (наприклад `http://localhost:5044`). Приклади для bash / Git Bash / Postman; у PowerShell використовуйте `curl.exe` або Swagger.
+
+```bash
+# список товарів (200)
+curl {BASE}/api/products
+
+# створити замовлення (201 + Location)
+curl -X POST {BASE}/api/orders -H "Content-Type: application/json" \
+  -d '{"customerId":1,"deliveryEmail":"olena.koval@example.com","items":[{"productId":1,"units":2}]}'
+
+# підтвердити замовлення (204); повторний виклик дає 409
+curl -X POST {BASE}/api/orders/2/confirm
+
+# неіснуюче замовлення (404, ProblemDetails)
+curl {BASE}/api/orders/99999
+
+# некоректне тіло (400): порожній список позицій
+curl -X POST {BASE}/api/orders -H "Content-Type: application/json" \
+  -d '{"customerId":1,"deliveryEmail":"a@b.com","items":[]}'
+```
+
+## Перевірка відкату транзакції
+Товар №4 має залишок 50. Створити два замовлення на 50 одиниць цього товару (обидва створяться), підтвердити перше (204, залишок 0), потім друге: відповідь **409** (`Not enough stock`), а замовлення лишається в статусі `Submitted`. Це доводить, що зміна статусу, виконана процедурою, відкотилася разом із невдалим зменшенням залишку.
