@@ -1,6 +1,8 @@
-using Serilog;
 using Catalog.Dal;
+using Catalog.Dal.Abstractions;
 using Microsoft.EntityFrameworkCore;
+using Serilog;
+using Serilog.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -11,18 +13,25 @@ var connectionString = builder.Configuration.GetConnectionString("CatalogDb")
 
 builder.Host.UseSerilog((ctx, cfg) => cfg
     .ReadFrom.Configuration(ctx.Configuration)
+    .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command",
+                           LogEventLevel.Information)   // SQL-запити EF Core
     .Enrich.FromLogContext()
     .WriteTo.Console());
 
 builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString));
 
+// Scoped: один Unit of Work (і один DbContext) на HTTP-запит
+builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
+
 builder.Services.AddControllers();
 
 var app = builder.Build();
 
-app.UseSerilogRequestLogging();
+app.UseSerilogRequestLogging(o => o.EnrichDiagnosticContext = (diag, http) =>
+    diag.Set("CorrelationId", http.TraceIdentifier));
+
 app.MapControllers();
 
-app.Logger.LogInformation("Catalog API started, connection string loaded");
+app.Logger.LogInformation("Catalog API started");
 
 app.Run();
