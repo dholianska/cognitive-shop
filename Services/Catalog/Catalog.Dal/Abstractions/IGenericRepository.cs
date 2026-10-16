@@ -1,3 +1,5 @@
+using Ardalis.Specification;
+
 namespace Catalog.Dal.Abstractions;
 
 /// <summary>
@@ -14,4 +16,10 @@ public interface IGenericRepository<T> where T : class
     // не звертаються до БД, лише змінюють стан у контексті, тому синхронні
     void Update(T entity);
     void Delete(T entity);
+
+    /// <summary>Вибірка за специфікацією (лише читання). Критерії описує сама специфікація.</summary>
+    Task<IReadOnlyList<T>> ListAsync(ISpecification<T> spec, CancellationToken ct = default);
+
+    /// <summary>Кількість записів, що відповідають специфікації (без Skip/Take).</summary>
+    Task<int> CountAsync(ISpecification<T> spec, CancellationToken ct = default);
 }

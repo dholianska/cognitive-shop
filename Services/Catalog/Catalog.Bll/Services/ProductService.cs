@@ -4,12 +4,40 @@ using Catalog.Dal.Abstractions;
 using Catalog.Domain.Entities;
 using Catalog.Domain.Exceptions;
 using Microsoft.Extensions.Logging;
+using Catalog.Dal.Specifications;
+using Catalog.Domain.Queries;
 
 namespace Catalog.Bll.Services;
 
 public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<ProductService> logger)
     : IProductService
 {
+    private const int MaxPageSize = 100;
+
+    /// <summary>
+    /// Список з пагінацією, фільтрацією й сортуванням. Усе виконує база (WHERE, ORDER BY,
+    /// OFFSET/FETCH, COUNT), у пам'ять потрапляє лише потрібна сторінка.
+    /// </summary>
+    public async Task<PagedResult<ProductDto>> GetListAsync(ProductQuery query, CancellationToken ct = default)
+    {
+        // нормалізація: сторінка від 1 (верхня межа захищає від переповнення int у Skip),
+        // розмір сторінки в межах 1..100
+        var q = query with
+        {
+            Page = Math.Clamp(query.Page, 1, 1_000_000),
+            PageSize = Math.Clamp(query.PageSize, 1, MaxPageSize)
+        };
+
+        var total = await uow.Products.CountAsync(new ProductsFilterSpec(q, paginate: false), ct);
+        var items = await uow.Products.ListAsync(new ProductsFilterSpec(q), ct);
+
+        return new PagedResult<ProductDto>(mapper.Map<List<ProductDto>>(items), total, q.Page, q.PageSize);
+    }
+
+    /// <summary>Друга специфікація з іншими критеріями: той самий ListAsync, без змін у репозиторії.</summary>
+    public async Task<IReadOnlyList<ProductDto>> GetLowStockAsync(int threshold, CancellationToken ct = default)
+        => mapper.Map<List<ProductDto>>(await uow.Products.ListAsync(new LowStockProductsSpec(threshold), ct));
+
     public async Task<ProductCardDto> GetByIdAsync(int id, CancellationToken ct = default)
     {
         // Eager Loading: товар, деталі, зображення й категорії одним запитом

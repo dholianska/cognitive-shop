@@ -1,3 +1,5 @@
+using Ardalis.Specification;
+using Ardalis.Specification.EntityFrameworkCore;
 using Catalog.Dal.Abstractions;
 using Microsoft.EntityFrameworkCore;
 
@@ -27,4 +29,11 @@ public class GenericRepository<T> : IGenericRepository<T> where T : class
 
     public void Update(T entity) => Set.Update(entity);
     public void Delete(T entity) => Set.Remove(entity);
+
+    // репозиторій лише застосовує специфікацію; сам не знає, за якими критеріями вибирати
+    public async Task<IReadOnlyList<T>> ListAsync(ISpecification<T> spec, CancellationToken ct = default)
+        => await Set.WithSpecification(spec).AsNoTracking().ToListAsync(ct);
+
+    public async Task<int> CountAsync(ISpecification<T> spec, CancellationToken ct = default)
+        => await Set.WithSpecification(spec).CountAsync(ct);
 }

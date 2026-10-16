@@ -52,6 +52,16 @@ var app = builder.Build();
 if (app.Environment.IsDevelopment())
     app.Services.GetRequiredService<AutoMapper.IConfigurationProvider>().AssertConfigurationIsValid();
 
+// міграції + програмний сідінг. Сідінг ідемпотентний (повторний запуск не створює дублів)
+// і вимикається в production
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+    await db.Database.MigrateAsync();
+    if (!app.Environment.IsProduction())
+        await DbInitializer.SeedAsync(db);
+}
+
 app.UseExceptionHandler();
 app.UseSerilogRequestLogging(o => o.EnrichDiagnosticContext = (diag, http) =>
     diag.Set("CorrelationId", http.TraceIdentifier));
