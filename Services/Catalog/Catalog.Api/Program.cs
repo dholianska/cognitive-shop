@@ -1,3 +1,6 @@
+using Catalog.Api;
+using Catalog.Bll.Mapping;
+using Catalog.Bll.Services;
 using Catalog.Dal;
 using Catalog.Dal.Abstractions;
 using Microsoft.EntityFrameworkCore;
@@ -23,12 +26,41 @@ builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString
 // Scoped: один Unit of Work (і один DbContext) на HTTP-запит
 builder.Services.AddScoped<IUnitOfWork, UnitOfWork>();
 
+builder.Services.AddAutoMapper(cfg =>
+{
+    cfg.LicenseKey = builder.Configuration["AutoMapper:LicenseKey"];
+    cfg.AddProfile<ProductProfile>();
+    cfg.AddProfile<CategoryProfile>();
+});
+
+builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+
 builder.Services.AddControllers();
+
+// помилки: стандартний формат ProblemDetails + один глобальний обробник
+builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
+    ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
+builder.Services.AddExceptionHandler<DomainExceptionHandler>();
+
+builder.Services.AddEndpointsApiExplorer();
+builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
 
+// перевірка мапінгу при старті: одразу видно, якщо в DTO є поле без пари в сутності
+if (app.Environment.IsDevelopment())
+    app.Services.GetRequiredService<AutoMapper.IConfigurationProvider>().AssertConfigurationIsValid();
+
+app.UseExceptionHandler();
 app.UseSerilogRequestLogging(o => o.EnrichDiagnosticContext = (diag, http) =>
     diag.Set("CorrelationId", http.TraceIdentifier));
+
+if (app.Environment.IsDevelopment())
+{
+    app.UseSwagger();
+    app.UseSwaggerUI();
+}
 
 app.MapControllers();
 
