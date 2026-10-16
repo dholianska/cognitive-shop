@@ -190,3 +190,106 @@ curl -X POST {BASE}/api/orders -H "Content-Type: application/json" \
 
 ## Перевірка відкату транзакції
 Товар №4 має залишок 50. Створити два замовлення на 50 одиниць цього товару (обидва створяться), підтвердити перше (204, залишок 0), потім друге: відповідь **409** (`Not enough stock`), а замовлення лишається в статусі `Submitted`. Це доводить, що зміна статусу, виконана процедурою, відкотилася разом із невдалим зменшенням залишку.
+
+---
+
+# Лаб. 03: мікросервіс Catalog (Entity Framework Core)
+
+## Схема рішення
+```
+Services/Catalog/
+├── Catalog.Api/      контролери, Program.cs, DomainExceptionHandler, Swagger
+├── Catalog.Bll/      сервіси, DTO, профілі AutoMapper, валідатори FluentValidation
+├── Catalog.Dal/      AppDbContext, Configurations/ (Fluent API), Migrations/, репозиторії,
+│                     Unit of Work, Specifications/, DbInitializer (сідінг)
+└── Catalog.Domain/   сутності з бізнес-правилами, доменні винятки, ProductQuery
+```
+Залежності: **Api -> Bll -> Dal**, `Domain` підключають Dal і Bll. Контролери не звертаються до `DbContext`.
+
+| Шар | Що містить |
+|---|---|
+| Domain | `Product`, `Category`, `ProductDetail` (1:1), `ProductImage` (1:N), `ProductCategory` (M:N із полем `AddedAt`). Правила всередині сутностей: приватні сеттери, перевірки в конструкторі, зміна стану лише методами (`ChangePrice`, `RemoveStock`, `AddStock`) |
+| Dal | окремі `IEntityTypeConfiguration<T>`, підключені в `OnModelCreating` через `ApplyConfigurationsFromAssembly`; Async Generic Repository; три специфічні репозиторії; Unit of Work з єдиним `SaveChangesAsync`; специфікації (Ardalis.Specification) |
+| Bll | `ProductService`, `CategoryService`, DTO, AutoMapper, `CreateProductDtoValidator`, `ProductQueryValidator` |
+
+Три специфічні репозиторії:
+- **Eager Loading** (`ProductRepository.GetWithDetailsAsync`): `Include/ThenInclude`, **1 SQL-запит**;
+- **Explicit Loading** (`CategoryRepository.GetWithProductsAsync`): `Entry(...).Collection(...).LoadAsync()`, **2 SQL-запити**;
+- **LINQ через проміжну сутність M:N** (`ProductCategoryRepository.GetRecentlyAddedAsync`): фільтр за полем `AddedAt`, 1 запит.
+
+## Запуск
+Потрібні: .NET 9 SDK, SQL Server (контейнер `sql1` з Лаб. 01-02 на порту 1433), інструмент `dotnet-ef` 9.x.
+
+1. Задати рядок підключення (пароль зберігається в user-secrets, у репозиторії його немає):
+```bash
+   dotnet user-secrets set "ConnectionStrings:CatalogDb" "Server=127.0.0.1,1433;Database=CatalogDb;User Id=sa;Password=<ваш_пароль>;TrustServerCertificate=True" --project Services/Catalog/Catalog.Api
+```
+2. Запустити сервіс:
+```bash
+   dotnet run --project Services/Catalog/Catalog.Api
+```
+   У середовищі Development при старті автоматично застосовуються міграції (`MigrateAsync`) і виконується ідемпотентний сідінг (у production сідінг вимкнено). Swagger: `<адреса>/swagger`.
+
+## Міграції
+```bash
+dotnet tool install --global dotnet-ef --version "9.*"
+dotnet ef migrations add InitialCreate --project Services/Catalog/Catalog.Dal --startup-project Services/Catalog/Catalog.Api
+dotnet ef database update --project Services/Catalog/Catalog.Dal --startup-project Services/Catalog/Catalog.Api
+dotnet ef migrations script --project Services/Catalog/Catalog.Dal --startup-project Services/Catalog/Catalog.Api
+```
+Початкова міграція лежить у `Services/Catalog/Catalog.Dal/Migrations/`, згенерований SQL-скрипт: `Migrations/InitialCreate.sql`.
+Переглянути все, що створила міграція: таблиці, складений ключ `ProductCategories`, `CHECK` на ціну й залишок, унікальний індекс `Sku`.
+
+## Сідінг
+- **Статичний** (`HasData` у `CategoryConfiguration`): п'ять категорій із фіксованими Id.
+- **Програмний** (`DbInitializer`, виконується після `MigrateAsync`): п'ять товарів із деталями, зображеннями й категоріями. Повторний запуск нічого не додає, бо перед вставкою перевіряється наявність товарів. Id товарів 1-5 збігаються з локальною копією довідника в БД Замовлень (Лаб. 01-02).
+
+## Ендпоінти й статуси відповідей
+| Метод і шлях | Успіх | Помилки |
+|---|---|---|
+| `GET /api/products` (пагінація, фільтри, сортування) | 200 | 400 |
+| `GET /api/products/{id}` (Eager Loading) | 200 | 404 |
+| `GET /api/products/low-stock?threshold=10` (друга специфікація) | 200 | 400 |
+| `POST /api/products` | 201 + Location | 400 (валідація), 409 (дубль SKU) |
+| `PUT /api/products/{id}/price` | 204 | 400, 404 |
+| `POST /api/products/{id}/stock/add`, `/stock/remove` | 204 | 400, 404, 409 (нестача товару) |
+| `PUT /api/products/{id}/categories/{categoryId}` | 204 | 404, 409 (дубль) |
+| `DELETE /api/products/{id}` | 204 | 404 |
+| `GET /api/categories`, `GET /api/categories/{id}` (Explicit Loading) | 200 | 404 |
+| `GET /api/categories/recent-products?name=Увага&since=2020-01-01` (M:N) | 200 | 400 |
+
+Помилки повертаються у форматі **ProblemDetails** (`ValidationProblemDetails` для 400 із валідації). Глобальний обробник `DomainExceptionHandler`: `EntityNotFoundException` -> 404, `ValidationException` -> 400, `ConflictException` і `DomainException` -> 409, решта -> 500 (деталі лише в Development). Кожен виняток логується один раз.
+
+## Пагінація, фільтрація, сортування
+`GET /api/products?page=1&pageSize=10&search=тест&minPrice=50&maxPrice=200&categoryId=1&sortBy=price&sortDir=desc`
+
+| Параметр | Опис |
+|---|---|
+| `page` | номер сторінки від 1 (за замовчуванням 1) |
+| `pageSize` | розмір сторінки, за замовчуванням 20, максимум 100 |
+| `search`, `minPrice`, `maxPrice`, `categoryId` | фільтри |
+| `sortBy` | `name` (за замовчуванням), `price`, `stock` |
+| `sortDir` | `asc` (за замовчуванням) або `desc` |
+
+Формат відповіді: у **тілі** `items`, `totalCount`, `page`, `pageSize`, `totalPages`, `hasNext`, `hasPrevious`; кількість усіх записів також у заголовку `X-Total-Count`. Фільтрація, сортування, `COUNT` і `OFFSET/FETCH` виконуються в SQL, у пам'ять потрапляє лише одна сторінка. Критерії описує `ProductsFilterSpec`.
+
+## Логування
+Serilog зі структурованими властивостями (`CorrelationId`, шлях запиту), вивід у консоль. Рівень логування SQL-команд EF Core: `Information`, тому в консолі видно, що Eager Loading виконує один запит, а Explicit Loading два (`Executed DbCommand`).
+Налаштування: `appsettings.json` (секція `Serilog`) і код у `Program.cs`.
+
+## Приклади запитів
+```bash
+# друга сторінка по 2 товари
+curl "{BASE}/api/products?page=2&pageSize=2"
+
+# фільтр за ціною й сортування
+curl "{BASE}/api/products?minPrice=100&maxPrice=180&sortBy=price&sortDir=desc"
+
+# створення товару (201); повтор із тим самим sku дає 409
+curl -X POST {BASE}/api/products -H "Content-Type: application/json" \
+  -d '{"name":"Тест Векслера","sku":"WAIS-01","price":250}'
+
+# помилка валідації (400 з переліком помилок по полях)
+curl -X POST {BASE}/api/products -H "Content-Type: application/json" \
+  -d '{"name":"","sku":"bad sku","price":-5}'
+```

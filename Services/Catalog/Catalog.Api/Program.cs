@@ -1,11 +1,14 @@
 using Catalog.Api;
 using Catalog.Bll.Mapping;
 using Catalog.Bll.Services;
+using Catalog.Bll.Validators;
 using Catalog.Dal;
 using Catalog.Dal.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using Serilog;
 using Serilog.Events;
+using FluentValidation;
+using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -36,7 +39,12 @@ builder.Services.AddAutoMapper(cfg =>
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 
-builder.Services.AddControllers();
+// вал≥датори (FluentValidation) реЇструютьс€ з зб≥рки й викликаютьс€ в контролерах €вно
+builder.Services.AddValidatorsFromAssemblyContaining<CreateProductDtoValidator>();
+
+// DataAnnotations лишаЇтьс€ лише дл€ простих правил, прописаних атрибутами;
+// не€вний [Required] дл€ non-nullable пол≥в вимкнено, щоб правила не виконувались у двох м≥сц€х
+builder.Services.AddControllers(o => o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true);
 
 // помилки: стандартний формат ProblemDetails + один глобальний обробник
 builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
