@@ -20,6 +20,8 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Reviews.Domain\Reviews.Domain.csproj" />
+    <ProjectReference Include="..\Reviews.Application\Reviews.Application.csproj" />
+    <ProjectReference Include="..\Reviews.Infrastructure\Reviews.Infrastructure.csproj" />
   </ItemGroup>
 
 </Project>
