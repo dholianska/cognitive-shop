@@ -12,7 +12,7 @@ public class Review : BaseEntity
     public const int ProductNameMaxLength = 200;
     public const int TextMaxLength = 2000;
 
-    private readonly List<Comment> _comments = new();   // вкладений масив
+    private List<Comment> _comments = new();   // вкладений масив (не readonly: драйвер заповнює поле при читанні)
 
     public long ProductId { get; private set; }                // посилання на Каталог (без FK)
     public string ProductName { get; private set; } = "";     // денормалізовано для читання
