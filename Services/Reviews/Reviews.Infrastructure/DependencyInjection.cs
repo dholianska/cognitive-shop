@@ -3,6 +3,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Reviews.Application.Common.Interfaces;
 using Reviews.Domain.Interfaces;
 using Reviews.Infrastructure.Persistence;
+using Reviews.Infrastructure.Seeding;
 
 namespace Reviews.Infrastructure;
 
@@ -17,6 +18,12 @@ public static class DependencyInjection
 
         services.AddScoped<IReviewRepository, ReviewRepository>();
         services.AddScoped<IReviewQueries, ReviewQueries>();
+
+        services.AddSingleton<IDataSeeder, ReviewSeeder>();
+
+        // hosted services стартують у порядку реєстрації: спершу індекси, потім сідінг
+        services.AddHostedService<IndexCreationService>();
+        services.AddHostedService<DataSeedingService>();
 
         return services;
     }
