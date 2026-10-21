@@ -293,3 +293,71 @@ curl -X POST {BASE}/api/products -H "Content-Type: application/json" \
 curl -X POST {BASE}/api/products -H "Content-Type: application/json" \
   -d '{"name":"","sku":"bad sku","price":-5}'
 ```
+
+---
+
+# Лаб. 04: мікросервіс Reviews (Clean Architecture, CQRS, MongoDB)
+
+## Схема шарів
+```
+Services/Reviews/
+├── Reviews.Domain/           BaseEntity, ValueObject, сутності, винятки, IReviewRepository
+├── Reviews.Application/      команди й запити (MediatR), behaviors, валідатори, IReviewQueries
+├── Reviews.Infrastructure/   MongoDbContext, BsonClassMap, репозиторій, запити, сідінг, індекси
+└── Reviews.WebApi/           контролери (ISender), Program.cs, обробка помилок
+```
+Залежності йдуть лише досередини: **WebApi -> Application, Infrastructure**; **Infrastructure -> Application, Domain**; **Application -> Domain**; **Domain не посилається ні на що**.
+
+| Шар | Що містить |
+|---|---|
+| Domain | `Review` і `Comment` із `BaseEntity` (`Id` ObjectId, `CreatedAt`, `UpdatedAt`, `Version`); Value Objects `Author` і `Rating` на базі `ValueObject`; доменні винятки; інтерфейс `IReviewRepository` |
+| Application | команди `CreateReview`, `UpdateReview`, `DeleteReview`, `AddComment`; запити `GetReviewById`, `GetReviewsList` через `IReviewQueries`; `ValidationBehavior`, `LoggingBehavior`, `PerformanceBehavior`; валідатори FluentValidation; профіль AutoMapper |
+| Infrastructure | `MongoDbContext` через `IOptions<MongoDbOptions>`; `BsonClassMap` без атрибутів у домені; `ReviewRepository` з оптимістичною конкурентністю; `ReviewQueries` з проєкцією в DTO; `IDataSeeder`; `IndexCreationService` |
+| WebApi | `ReviewsController` лише через `ISender`; `DomainExceptionHandler` (ProblemDetails, MongoDB-винятки); Swagger; health check |
+
+Порядок виконання pipeline: **Logging -> Validation -> Performance -> обробник**. Невалідна команда до обробника не доходить.
+
+## Запуск
+Потрібні .NET 9 SDK і MongoDB (Docker).
+```bash
+docker run -d --name mongo1 -p 27017:27017 mongo:7
+dotnet run --project Services/Reviews/Reviews.WebApi
+```
+Swagger: `<адреса із консолі>/swagger`. При старті автоматично створюються індекси й (у Development) виконується ідемпотентний сідінг.
+
+Конфігурація: секція `MongoDb` в `appsettings.json` (рядок підключення, `DatabaseName`, `SeedOnStartup`) з перевизначенням у `appsettings.{Environment}.json`. Параметри пулу й таймаутів задані в рядку підключення (`maxPoolSize`, `serverSelectionTimeoutMS`). У Production сідінг вимкнено, а рядок підключення задається змінною оточення `MongoDb__ConnectionString`.
+
+> Структура документів у Лаб. 04 відрізняється від Лаб. 01: `author.userId` тут рядок, а колекцію й індекси створює сам застосунок (без `$jsonSchema`). Тому перед першим запуском стару базу з Лаб. 01 видаляють: `docker exec mongo1 mongosh --eval "db.getSiblingDB('ReviewsDb').dropDatabase()"`.
+
+## Ендпоінти й статуси
+| Метод і шлях | Успіх | Помилки |
+|---|---|---|
+| `GET /api/reviews?productId=1&page=1&pageSize=20` | 200 | 400 |
+| `GET /api/reviews/{id}` (версія в `ETag`) | 200 | 400 (не ObjectId), 404 |
+| `POST /api/reviews` | 201 + Location | 400 (валідація, дубль відгуку), 409 |
+| `PUT /api/reviews/{id}` (заголовок `If-Match` необов'язковий) | 200 | 400, 404, 409 (конфлікт версій) |
+| `DELETE /api/reviews/{id}` | 204 | 400, 404 |
+| `POST /api/reviews/{id}/comments` | 204 | 400, 404, 409 |
+| `GET /health` | 200 | 503 |
+
+Помилки: `NotFoundException` -> 404, `ValidationException` -> 400 (з помилками по полях), `DomainException` -> 400, `ConflictException` -> 409, `MongoWriteException` з `DuplicateKey` -> 409, `MongoConnectionException` і `TimeoutException` -> 503, решта -> 500.
+
+## Індекси
+| Індекс | Призначення |
+|---|---|
+| `ix_product_created` (`productId` asc, `createdAt` desc) | останні відгуки про товар |
+| `ix_text` (text по `text`) | повнотекстовий пошук |
+| `ux_product_author` (`productId`, `author.userId`, unique) | один відгук від автора на товар |
+
+Перевірка: `db.reviews.getIndexes()`.
+
+## Приклади запитів
+```bash
+# створення відгуку (201); rating: 10 дає 400 ще до виклику обробника
+curl -X POST {BASE}/api/reviews -H "Content-Type: application/json" \
+  -d '{"productId":4,"productName":"Просторове мислення: ментальне обертання","authorId":"u-9","authorName":"Іван","rating":4,"text":"Корисно"}'
+
+# оновлення з перевіркою версії (повторний запит із тим самим If-Match дає 409)
+curl -X PUT {BASE}/api/reviews/{id} -H "Content-Type: application/json" -H 'If-Match: "0"' \
+  -d '{"rating":5,"text":"Оновлено"}'
+```
