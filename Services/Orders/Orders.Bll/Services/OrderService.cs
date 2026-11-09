@@ -6,10 +6,11 @@ using Orders.Dal.Abstractions;
 using Orders.Domain.Exceptions;
 using Orders.Domain.Models;
 using System.Diagnostics;
+using Orders.Bll.Caching;
 
 namespace Orders.Bll.Services;
 
-public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService> logger) : IOrderService
+public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ITwoLevelCache cache, ILogger<OrderService> logger) : IOrderService
 {
     private static readonly ActivitySource Source = new("Orders.Api");
 
@@ -21,9 +22,13 @@ public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderS
 
     public async Task<OrderDto> GetByIdAsync(long id, CancellationToken ct = default)
     {
-        var order = await uow.Orders.GetWithItemsAsync(id, ct)
-                    ?? throw new NotFoundException($"Order {id} not found");
-        return mapper.Map<OrderDto>(order);
+        var dto = await cache.GetOrCreateAsync(CacheKeys.Order(id), CachePolicy.Order, async c =>
+        {
+            var order = await uow.Orders.GetWithItemsAsync(id, c);
+            return order is null ? null : mapper.Map<OrderDto>(order);
+        }, ct);
+
+        return dto ?? throw new NotFoundException($"Order {id} not found");
     }
 
     public async Task<IReadOnlyList<OrderDto>> GetByCustomerAsync(long customerId, CancellationToken ct = default)
@@ -135,6 +140,7 @@ public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderS
             throw;
         }
 
+        await cache.RemoveAsync(CacheKeys.Order(orderId), "OrderConfirmed", ct);
         logger.LogInformation("Order {OrderId} confirmed", orderId);
     }
 
@@ -169,6 +175,7 @@ public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderS
             throw;
         }
 
+        await cache.RemoveAsync(CacheKeys.Order(orderId), "StatusChanged", ct);
         logger.LogInformation("Order {OrderId} status changed to {Status}", orderId, newStatus);
     }
 
@@ -181,5 +188,6 @@ public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderS
             throw new BusinessConflictException("Only submitted or cancelled orders can be deleted");
 
         await uow.Orders.DeleteAsync(orderId, ct);   // м'яке видалення (IsDeleted = 1)
+        await cache.RemoveAsync(CacheKeys.Order(orderId), "OrderDeleted", ct);
     }
 }
