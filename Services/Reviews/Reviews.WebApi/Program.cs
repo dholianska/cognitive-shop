@@ -5,9 +5,12 @@ using Reviews.WebApi;
 using Reviews.WebApi.Health;
 using Reviews.WebApi.GrpcServices;
 using Platform.ServiceDefaults;
+using Reviews.Application.Caching;
+using Reviews.WebApi.Metrics;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
+builder.AddRedisDistributedCache("redis");
 
 // Aspire передає ConnectionStrings:ReviewsDb; кладемо його туди, звідки його читає Лаб. 04
 var mongoCs = builder.Configuration.GetConnectionString("ReviewsDb");
@@ -43,6 +46,14 @@ builder.Services.AddHealthChecks().AddCheck<MongoHealthCheck>("mongodb");
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+builder.Services.AddMemoryCache(o =>
+{
+    o.SizeLimit = 10_000;
+    o.CompactionPercentage = 0.20;
+    o.ExpirationScanFrequency = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddSingleton<ICacheMetrics, CacheMetrics>();
 
 var app = builder.Build();
 app.UseCorrelationId();

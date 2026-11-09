@@ -1,4 +1,4 @@
-﻿using System.Diagnostics.Metrics;
+using System.Diagnostics.Metrics;
 using Reviews.Application.Caching;
 
 namespace Reviews.WebApi.Metrics;
