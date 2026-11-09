@@ -13,7 +13,7 @@ service ReviewsService {
 
 message GetForProductsRequest {
   repeated int64 product_ids = 1;
-  int32 page_size = 2;
+  int32 page_size = 2; // відгуків на товар; 0 = значення за замовчуванням (20)
 }
 
 message ReviewReply {

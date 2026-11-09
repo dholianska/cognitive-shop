@@ -17,6 +17,11 @@
     <PackageReference Include="Microsoft.AspNetCore.OpenApi" Version="9.0.14" />
   </ItemGroup>
   <ItemGroup>
+	  <Protobuf Include="..\Services\Catalog\Catalog.Api\Protos\catalog.proto" GrpcServices="Client" />
+	  <Protobuf Include="..\Services\Orders\Orders.Api\Protos\orders.proto" GrpcServices="Client" />
+	  <Protobuf Include="..\Services\Reviews\Reviews.WebApi\Protos\reviews.proto" GrpcServices="Client" />
+  </ItemGroup>
+  <ItemGroup>
     <ProjectReference Include="..\Platform.ServiceDefaults\Platform.ServiceDefaults.csproj" />
     <ProjectReference Include="..\Services\Catalog\Catalog.Api\Catalog.Api.csproj" />
     <ProjectReference Include="..\Services\Orders\Orders.Api\Orders.Api.csproj" />
