@@ -131,7 +131,7 @@ Platform.slnx
 
 Рівень ізоляції транзакцій: `ReadCommitted` (дивиться `UnitOfWork`). Вищий рівень зменшує аномалії читання, але збільшує блокування й ризик взаємних блокувань. Від втрати оновлень залишок захищають атомарний `UPDATE ... WHERE Stock >= @Quantity` і `UPDLOCK` у процедурах.
 
-## Запуск через Aspire
+## Запуск через Aspire (Лаб 02)
 
 Потрібні: .NET 9 SDK, Docker Desktop (запущений), SSMS або Visual Studio для застосування SQL-скриптів.
 
@@ -361,3 +361,94 @@ curl -X POST {BASE}/api/reviews -H "Content-Type: application/json" \
 curl -X PUT {BASE}/api/reviews/{id} -H "Content-Type: application/json" -H 'If-Match: "0"' \
   -d '{"rating":5,"text":"Оновлено"}'
 ```
+
+
+
+---
+
+# Платформа на .NET Aspire (Лаб. 05)
+
+Розділи вище описують запуск окремих сервісів (Лаб. 02–04). Цей розділ описує **запуск усієї платформи однією командою**: три мікросервіси, бази даних, API Gateway, Aggregator і спостережуваність.
+
+## Архітектура
+
+| Компонент | Проєкт | Призначення |
+|---|---|---|
+| AppHost | `Platform.AppHost` | Оркестрація: запускає контейнери SQL Server і MongoDB, сервіси, Aggregator і Gateway; передає рядки підключення та налаштовує service discovery. Бізнес-логіки не містить |
+| ServiceDefaults | `Platform.ServiceDefaults` | Спільні налаштування, які підключає кожен сервіс: Serilog (структуровані логи), OpenTelemetry (HTTP, SQL, MongoDB, експорт OTLP), CorrelationId (middleware + DelegatingHandler), health checks, resilience |
+| API Gateway | `Platform.ApiGateway` | Єдина точка входу на YARP. Маршрутизує запити за логічними іменами сервісів, генерує CorrelationId, логує маршрутизацію |
+| Aggregator | `Platform.Aggregator` | Паралельно (`Task.WhenAll`) опитує кілька сервісів і збирає одну відповідь; при недоступності сервісу повертає часткову відповідь із переліком попереджень |
+| Мікросервіси | `Services/Orders`, `Services/Catalog`, `Services/Reviews` | Замовлення (SQL Server, ADO.NET/Dapper), Каталог (SQL Server, EF Core), Відгуки (MongoDB, Clean Architecture + CQRS) |
+
+Залежності односпрямовані: AppHost посилається на всі проєкти, а сервіси, Gateway та Aggregator лише на ServiceDefaults. Сервіси знаходять один одного за логічними іменами (`orders-api`, `catalog-api`, `reviews-api`, `aggregator`), а не за портами.
+
+Порядок запуску задається в AppHost: бази даних → сервіси → Aggregator → Gateway.
+
+## Запуск
+
+Вимоги: .NET 9 SDK, Docker Desktop (має бути запущений до старту).
+
+1. Пароль SQL Server задається секретом AppHost (одноразово):
+
+   ```bash
+   cd Platform.AppHost
+   dotnet user-secrets set "Parameters:sql-password" "<ваш пароль>"
+   cd ..
+   ```
+
+2. Запуск усієї платформи:
+
+   ```bash
+   dotnet run --project Platform.AppHost
+   ```
+
+   У браузері відкриється **Aspire Dashboard**. Усі ресурси (`sql`, `mongo`, `orders-api`, `catalog-api`, `reviews-api`, `aggregator`, `gateway`) мають отримати статус **Running**. Контейнери баз використовують постійні volume, тож дані зберігаються між перезапусками.
+
+3. Розгортання БД Замовлень (лише при першому запуску): після старту SQL Server виконайте скрипти `db/p1/schema.sql`, `procedures.sql`, `seed.sql` на `127.0.0.1,14330` (логін `sa`, пароль із кроку 1). Каталог (EF Core міграції) і Відгуки (MongoDB) ініціалізуються самі при старті.
+
+## Gateway та Aggregator
+
+Єдина точка входу для клієнтів: **http://localhost:5000**
+
+| Маршрут через Gateway | Куди проксується |
+|---|---|
+| `/api/orders/…`, `/api/customers/…` | `orders-api` |
+| `/api/products/…`, `/api/categories/…` | `catalog-api` |
+| `/api/reviews/…` | `reviews-api` |
+| `/api/aggregator/…` | `aggregator` (пріоритетний маршрут) |
+
+Приклади запитів (у Windows PowerShell використовуйте `curl.exe`):
+
+```bash
+# звичайні запити через Gateway
+curl -i http://localhost:5000/api/orders/1
+curl -i "http://localhost:5000/api/products?page=1"
+curl -i "http://localhost:5000/api/reviews?productId=1"
+
+# агрегований запит: замовлення + товари + відгуки в одній відповіді
+curl -i http://localhost:5000/api/aggregator/orders/1/full
+```
+
+Відповідь агрегувального ендпоінта містить `order`, `products`, `reviews` і `warnings`. Якщо якийсь із сервісів недоступний, замість помилки 500 приходить часткова відповідь: доступні дані плюс попередження, наприклад `"reviews-api is unavailable"`. Якщо недоступний `orders-api`, відповідь буде `503`, бо без замовлення агрегувати нічого; відсутнє замовлення дає `404`.
+
+## CorrelationId і спостережуваність
+
+- Кожна відповідь містить заголовок `X-Correlation-Id`. Gateway генерує його на вході (або зберігає значення клієнта), і він передається далі через усі сервіси та HTTP-виклики Aggregator.
+- **Aspire Dashboard → Structured logs**: фільтр `CorrelationId = <значення з відповіді>` показує логи всіх сервісів ланцюжка. Кожен запис містить `ServiceName`, `Environment`, `MachineName`, `TraceId`, `SpanId`.
+- **Aspire Dashboard → Traces**: повний шлях `gateway → aggregator → сервіси → SQL/MongoDB` в одному trace; виклики до `catalog-api` і `reviews-api` стартують паралельно.
+- Логи Gateway містять рішення про маршрутизацію (маршрут, метод, шлях, статус, тривалість, помилки недоступних сервісів).
+
+## Перевірка часткової відповіді
+
+1. У Dashboard зупиніть ресурс `reviews-api` (Stop).
+2. Виконайте `curl -i http://localhost:5000/api/aggregator/orders/1/full`: відповідь `200`, у `warnings` є `reviews-api is unavailable`, замовлення й товари на місці.
+3. Запустіть `reviews-api` знову: відповідь знову повна, `warnings` порожній.
+
+## Типові проблеми
+
+| Симптом | Причина і рішення |
+|---|---|
+| Сервіси не стартують, контейнери не з'являються | Docker Desktop не запущений: запустіть його і перезапустіть AppHost |
+| `Login failed for user 'sa'` | Змінили `sql-password`, а volume SQL Server зберігає старий пароль: видаліть volume контейнера `sql` і запустіть знову |
+| `OrdersDb` порожня, замовлення не знаходяться | Не виконано скрипти `db/p1` (див. крок 3 запуску) |
+| Порт 5000 зайнятий | Звільніть порт або змініть `port: 5000` для Gateway в `Platform.AppHost/Program.cs` |
