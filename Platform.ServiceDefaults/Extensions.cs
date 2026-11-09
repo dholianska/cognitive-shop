@@ -58,6 +58,7 @@ public static class Extensions
             .Enrich.WithProperty("Environment", envName)
             .Enrich.WithMachineName()
             .Enrich.WithThreadId()
+            .Enrich.WithSpan()
             .WriteTo.Console(new CompactJsonFormatter()),
             writeToProviders: true);   // -> провайдер OpenTelemetry -> Structured logs у Dashboard
 
