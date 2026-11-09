@@ -1,0 +1,33 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+option csharp_namespace = "Orders.Grpc";
+
+package orders;
+
+// Читання замовлень для внутрішніх сервісів (Aggregator)
+service OrdersService {
+  // Замовлення з позиціями. NotFound, якщо замовлення немає
+  rpc GetOrder (GetOrderRequest) returns (OrderReply);
+}
+
+message GetOrderRequest { int64 id = 1; }
+
+message OrderItemReply {
+  int64 product_id = 1;
+  string product_name = 2;
+  double unit_price = 3;
+  double discount = 4;
+  int32 units = 5;
+}
+
+message OrderReply {
+  int64 id = 1;
+  int64 customer_id = 2;
+  string status = 3;
+  google.protobuf.Timestamp order_date = 4;
+  optional string delivery_email = 5;
+  optional string comment = 6;
+  repeated OrderItemReply items = 7;
+}

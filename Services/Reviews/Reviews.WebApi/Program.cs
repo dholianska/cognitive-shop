@@ -3,6 +3,7 @@ using Reviews.Application.Common.Mappings;
 using Reviews.Infrastructure;
 using Reviews.WebApi;
 using Reviews.WebApi.Health;
+using Reviews.WebApi.GrpcServices;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -22,6 +23,8 @@ builder.Services.AddAutoMapper(cfg =>
     cfg.LicenseKey = builder.Configuration["LuckyPenny:LicenseKey"];   // необов'язково, як і для MediatR
     cfg.AddMaps(typeof(ReviewProfile).Assembly);
 });
+
+builder.Services.AddGrpc(o => o.EnableDetailedErrors = builder.Environment.IsDevelopment());
 
 // неявний [Required] для non-nullable полів вимкнено: усі правила валідації виконує pipeline MediatR
 builder.Services.AddControllers(o => o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true);
@@ -53,6 +56,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapGrpcService<ReviewsGrpcService>();
 app.Logger.LogInformation("Reviews API started");
 
 app.Run();

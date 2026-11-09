@@ -9,6 +9,7 @@ using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 using Catalog.Api.Metrics;
 using Catalog.Bll.Caching;
+using Catalog.Api.GrpcServices;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -33,6 +34,8 @@ builder.Services.AddAutoMapper(cfg =>
 
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
+
+builder.Services.AddGrpc(o => o.EnableDetailedErrors = builder.Environment.IsDevelopment());
 
 // L1: кеш у пам'яті з обмеженням розміру. Кожен запис має Size = 1, тож максимум 10 000 записів
 builder.Services.AddMemoryCache(o =>
@@ -87,6 +90,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapGrpcService<CatalogGrpcService>();
 
 app.Logger.LogInformation("Catalog API started");
 

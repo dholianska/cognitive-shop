@@ -3,6 +3,7 @@ using Orders.Bll.Mapping;
 using Orders.Bll.Services;
 using Orders.Dal;
 using Orders.Dal.Abstractions;
+using Orders.Api.GrpcServices;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -22,6 +23,8 @@ builder.Services.AddAutoMapper(cfg =>
     cfg.AddProfile<CustomerProfile>();
     cfg.AddProfile<ProductProfile>();
 });
+
+builder.Services.AddGrpc(o => o.EnableDetailedErrors = builder.Environment.IsDevelopment());
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductService, ProductService>();
@@ -54,6 +57,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapGrpcService<OrdersGrpcService>();
 
 app.Logger.LogInformation("Orders API started");
 
