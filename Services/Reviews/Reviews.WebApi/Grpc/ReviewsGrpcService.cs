@@ -6,6 +6,7 @@ using Reviews.Application.Queries.GetReviewsList;
 using Reviews.Domain.Exceptions;
 using Reviews.Grpc;
 using Serilog.Context;
+using System.Diagnostics;
 
 namespace Reviews.WebApi.GrpcServices;
 
@@ -19,6 +20,7 @@ public class ReviewsGrpcService(ISender mediator) : ReviewsService.ReviewsServic
     public override async Task<ReviewsReply> GetForProducts(GetForProductsRequest request, ServerCallContext context)
     {
         using var scope = LogContext.PushProperty("Protocol", "gRPC");
+        Activity.Current?.SetTag("products.count", request.ProductIds.Count);
 
         if (request.ProductIds.Count is 0 or > MaxProducts)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"ProductIds count must be 1..{MaxProducts}"));

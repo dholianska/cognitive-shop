@@ -4,6 +4,7 @@ using Catalog.Domain.Exceptions;
 using Catalog.Grpc;
 using Grpc.Core;
 using Serilog.Context;
+using System.Diagnostics;
 
 namespace Catalog.Api.GrpcServices;
 
@@ -16,6 +17,7 @@ public class CatalogGrpcService(IProductService products, ILogger<CatalogGrpcSer
     public override async Task<ProductReply> GetProduct(GetProductRequest request, ServerCallContext context)
     {
         using var scope = LogContext.PushProperty("Protocol", "gRPC");
+        Activity.Current?.SetTag("product.id", request.Id);
 
         if (request.Id <= 0)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Id must be positive"));
@@ -34,6 +36,7 @@ public class CatalogGrpcService(IProductService products, ILogger<CatalogGrpcSer
     public override async Task<ProductsReply> GetProductsByIds(GetProductsByIdsRequest request, ServerCallContext context)
     {
         using var scope = LogContext.PushProperty("Protocol", "gRPC");
+        Activity.Current?.SetTag("products.count", request.Ids.Count);
 
         if (request.Ids.Count is 0 or > MaxBatch)
             throw new RpcException(new Status(StatusCode.InvalidArgument, $"Ids count must be 1..{MaxBatch}"));

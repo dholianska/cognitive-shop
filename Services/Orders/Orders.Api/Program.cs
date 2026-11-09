@@ -4,6 +4,7 @@ using Orders.Bll.Services;
 using Orders.Dal;
 using Orders.Dal.Abstractions;
 using Orders.Api.GrpcServices;
+using Platform.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -24,7 +25,11 @@ builder.Services.AddAutoMapper(cfg =>
     cfg.AddProfile<ProductProfile>();
 });
 
-builder.Services.AddGrpc(o => o.EnableDetailedErrors = builder.Environment.IsDevelopment());
+builder.Services.AddGrpc(o =>
+{
+    o.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    o.Interceptors.Add<GrpcLoggingInterceptor>();
+});
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductService, ProductService>();

@@ -5,6 +5,7 @@ using Orders.Bll.Services;
 using Orders.Domain.Exceptions;
 using Orders.Grpc;
 using Serilog.Context;
+using System.Diagnostics;
 
 namespace Orders.Api.GrpcServices;
 
@@ -14,6 +15,7 @@ public class OrdersGrpcService(IOrderService orders) : OrdersService.OrdersServi
     public override async Task<OrderReply> GetOrder(GetOrderRequest request, ServerCallContext context)
     {
         using var scope = LogContext.PushProperty("Protocol", "gRPC");
+        Activity.Current?.SetTag("order.id", request.Id);
 
         if (request.Id <= 0)
             throw new RpcException(new Status(StatusCode.InvalidArgument, "Id must be positive"));
