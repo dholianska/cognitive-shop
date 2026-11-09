@@ -7,10 +7,12 @@ using Microsoft.Extensions.Logging;
 using Catalog.Dal.Specifications;
 using Catalog.Domain.Queries;
 using System.Diagnostics;
+using Catalog.Bll.Caching;
+using Microsoft.Extensions.Caching.Memory;
 
 namespace Catalog.Bll.Services;
 
-public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<ProductService> logger)
+public sealed class ProductService(IUnitOfWork uow, IMapper mapper, IMemoryCache cache, ILogger<ProductService> logger)
     : IProductService
 {
     private static readonly ActivitySource Source = new("Catalog.Api");
@@ -42,10 +44,29 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
 
     public async Task<ProductCardDto> GetByIdAsync(int id, CancellationToken ct = default)
     {
-        // Eager Loading: товар, деталі, зображення й категорії одним запитом
+        var key = CacheKeys.Product(id);
+
+        // 1) кеш
+        if (cache.TryGetValue(key, out ProductCardDto? cached) && cached is not null)
+        {
+            logger.LogDebug("Cache hit {Key}, level {Level}", key, "L1");
+            return cached;
+        }
+        logger.LogDebug("Cache miss {Key}, level {Level}", key, "L1");
+
+        // 2) промах: читаємо з БД (Eager Loading: товар, деталі, зображення, категорії)
         var product = await uow.Products.GetWithDetailsAsync(id, ct)
-                    ?? throw new EntityNotFoundException($"Product {id} not found");
-        return mapper.Map<ProductCardDto>(product);
+                      ?? throw new EntityNotFoundException($"Product {id} not found");
+        var dto = mapper.Map<ProductCardDto>(product);
+
+        // 3) запис у кеш: sliding для «гарячих» товарів, absolute як верхня межа життя
+        cache.Set(key, dto, new MemoryCacheEntryOptions
+        {
+            Size = 1,
+            SlidingExpiration = TimeSpan.FromMinutes(5),
+            AbsoluteExpirationRelativeToNow = TimeSpan.FromHours(1)
+        });
+        return dto;
     }
 
     public async Task<ProductDto> CreateAsync(CreateProductDto input, CancellationToken ct = default)
@@ -78,6 +99,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
 
         product.ChangePrice(newPrice);         // інваріант у сутності
         await uow.SaveChangesAsync(ct);         // контекст сам помітив зміну: Update() не потрібен
+        Invalidate(id, "PriceChanged");
 
         logger.LogInformation("Product {ProductId} price changed from {OldPrice} to {NewPrice}",
             id, oldPrice, newPrice);
@@ -88,6 +110,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
         var product = await GetTrackedAsync(id, ct);
         product.AddStock(quantity);
         await uow.SaveChangesAsync(ct);
+        Invalidate(id, "StockAdded");
     }
 
     public async Task RemoveStockAsync(int id, int quantity, CancellationToken ct = default)
@@ -95,6 +118,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
         var product = await GetTrackedAsync(id, ct);
         product.RemoveStock(quantity);          // нестача товару: DomainException (409)
         await uow.SaveChangesAsync(ct);
+        Invalidate(id, "StockRemoved");
     }
 
     /// <summary>M:N: додає товар у категорію (дату AddedAt проставляє база).</summary>
@@ -108,6 +132,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
 
         product.AddToCategory(categoryId);      // дубль: DomainException (409)
         await uow.SaveChangesAsync(ct);
+        Invalidate(productId, "CategoryAssigned");
     }
 
     public async Task DeleteAsync(int id, CancellationToken ct = default)
@@ -115,6 +140,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
         var product = await GetTrackedAsync(id, ct);
         uow.Products.Delete(product);           // деталі, зображення й зв'язки з категоріями видалить каскад
         await uow.SaveChangesAsync(ct);
+        Invalidate(id, "ProductDeleted");
 
         logger.LogInformation("Product {ProductId} deleted", id);
     }
@@ -122,4 +148,11 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
     private async Task<Product> GetTrackedAsync(int id, CancellationToken ct)
         => await uow.Products.GetByIdAsync(id, ct)
            ?? throw new EntityNotFoundException($"Product {id} not found");
+
+    private void Invalidate(int id, string reason)
+    {
+        var key = CacheKeys.Product(id);
+        cache.Remove(key);
+        logger.LogInformation("Cache invalidated {Key}, reason {Reason}", key, reason);
+    }
 }

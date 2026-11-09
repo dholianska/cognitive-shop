@@ -31,6 +31,14 @@ builder.Services.AddAutoMapper(cfg =>
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 
+// L1: кеш у пам'яті з обмеженням розміру. Кожен запис має Size = 1, тож максимум 10 000 записів
+builder.Services.AddMemoryCache(o =>
+{
+    o.SizeLimit = 10_000;
+    o.CompactionPercentage = 0.20;                        // при переповненні витісняємо 20 % записів
+    o.ExpirationScanFrequency = TimeSpan.FromSeconds(30); // як часто чистити прострочені
+});
+
 // валідатори (FluentValidation) реєструються з збірки й викликаються в контролерах явно
 builder.Services.AddValidatorsFromAssemblyContaining<CreateProductDtoValidator>();
 
