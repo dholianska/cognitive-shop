@@ -1,6 +1,5 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Пароль SQL Server: секрет AppHost (user-secrets), не в коді
 var sqlPassword = builder.AddParameter("sql-password", secret: true);
 
 var sql = builder.AddSqlServer("sql", sqlPassword, port: 14330)
@@ -13,18 +12,26 @@ var mongo = builder.AddMongoDB("mongo")
     .WithDataVolume();
 var reviewsDb = mongo.AddDatabase("ReviewsDb"); // Лаб. 04
 
+// Лаб. 06: розподілений кеш. Ім'я "redis" = ConnectionStrings:redis у сервісах
+var redis = builder.AddRedis("redis")
+    .WithDataVolume();
+
 var orders = builder.AddProject<Projects.Orders_Api>("orders-api")
-    .WithReference(ordersDb).WaitFor(ordersDb);
+    .WithReference(ordersDb).WaitFor(ordersDb)
+    .WithReference(redis).WaitFor(redis);
 
 var catalog = builder.AddProject<Projects.Catalog_Api>("catalog-api")
-    .WithReference(catalogDb).WaitFor(catalogDb);
+    .WithReference(catalogDb).WaitFor(catalogDb)
+    .WithReference(redis).WaitFor(redis);
 
 var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
-    .WithReference(reviewsDb).WaitFor(reviewsDb);
+    .WithReference(reviewsDb).WaitFor(reviewsDb)
+    .WithReference(redis).WaitFor(redis);
 
 var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
     .WithReference(orders).WithReference(catalog).WithReference(reviews)
-    .WaitFor(orders).WaitFor(catalog).WaitFor(reviews);
+    .WithReference(redis)
+    .WaitFor(orders).WaitFor(catalog).WaitFor(reviews).WaitFor(redis);
 
 builder.AddProject<Projects.Platform_ApiGateway>("gateway")
     .WithHttpEndpoint(port: 5000, name: "public")
