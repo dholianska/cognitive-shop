@@ -6,6 +6,7 @@ using Reviews.Application.Common.Models;
 using Reviews.Domain.Exceptions;
 using Reviews.Domain.Interfaces;
 using Reviews.Domain.ValueObjects;
+using Reviews.Application.Caching;
 
 namespace Reviews.Application.Commands.UpdateReview;
 
@@ -14,7 +15,11 @@ namespace Reviews.Application.Commands.UpdateReview;
 /// з поточною версією, повертається конфлікт. Результат: оновлений відгук з новою версією.
 /// </summary>
 public record UpdateReviewCommand(string Id, int Rating, string Text, int? ExpectedVersion = null)
-    : ICommand<ReviewDto>;
+    : ICommand<ReviewDto>, ICacheInvalidatingCommand
+{
+    string? ICacheInvalidatingCommand.ReviewId => Id;
+    string ICacheInvalidatingCommand.Reason => "ReviewUpdated";
+}
 
 public class UpdateReviewCommandHandler(IReviewRepository reviews, IMapper mapper)
     : IRequestHandler<UpdateReviewCommand, ReviewDto>

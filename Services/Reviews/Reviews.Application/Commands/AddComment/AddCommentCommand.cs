@@ -4,10 +4,16 @@ using Reviews.Application.Common.Interfaces;
 using Reviews.Domain.Exceptions;
 using Reviews.Domain.Interfaces;
 using Reviews.Domain.ValueObjects;
+using Reviews.Application.Caching;
 
 namespace Reviews.Application.Commands.AddComment;
 
-public record AddCommentCommand(string ReviewId, string AuthorId, string AuthorName, string Text) : ICommand;
+public record AddCommentCommand(string ReviewId, string AuthorId, string AuthorName, string Text)
+    : ICommand, ICacheInvalidatingCommand
+{
+    string? ICacheInvalidatingCommand.ReviewId => ReviewId;
+    string ICacheInvalidatingCommand.Reason => "CommentAdded";
+}
 
 public class AddCommentCommandHandler(IReviewRepository reviews) : IRequestHandler<AddCommentCommand>
 {

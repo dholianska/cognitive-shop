@@ -7,9 +7,14 @@ using Catalog.Dal.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Catalog.Api.Metrics;
+using Catalog.Bll.Caching;
+using Catalog.Api.GrpcServices;
+using Platform.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
+builder.AddRedisDistributedCache("redis");   // IDistributedCache поверх Redis; рядок підключення передає Aspire
 
 // Рядок підключення: appsettings.json, перекритий user-secrets або змінною оточення
 // ConnectionStrings__CatalogDb. Якщо його немає, застосунок не стартує.
@@ -30,6 +35,23 @@ builder.Services.AddAutoMapper(cfg =>
 
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
+
+builder.Services.AddGrpc(o =>
+{
+    o.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    o.Interceptors.Add<GrpcLoggingInterceptor>();
+    });
+
+// L1: кеш у пам'яті з обмеженням розміру. Кожен запис має Size = 1, тож максимум 10 000 записів
+builder.Services.AddMemoryCache(o =>
+{
+    o.SizeLimit = 10_000;
+    o.CompactionPercentage = 0.20;                        // при переповненні витісняємо 20 % записів
+    o.ExpirationScanFrequency = TimeSpan.FromSeconds(30); // як часто чистити прострочені
+});
+
+builder.Services.AddSingleton<ICacheMetrics, CacheMetrics>();
+builder.Services.AddSingleton<ITwoLevelCache, TwoLevelCache>();
 
 // валідатори (FluentValidation) реєструються з збірки й викликаються в контролерах явно
 builder.Services.AddValidatorsFromAssemblyContaining<CreateProductDtoValidator>();
@@ -73,6 +95,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapGrpcService<CatalogGrpcService>();
 
 app.Logger.LogInformation("Catalog API started");
 

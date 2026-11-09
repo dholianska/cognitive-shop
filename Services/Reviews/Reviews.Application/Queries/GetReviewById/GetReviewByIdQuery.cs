@@ -2,10 +2,16 @@ using MediatR;
 using Reviews.Application.Common.Interfaces;
 using Reviews.Application.Common.Models;
 using Reviews.Domain.Exceptions;
+using Reviews.Application.Caching;
 
 namespace Reviews.Application.Queries.GetReviewById;
 
-public record GetReviewByIdQuery(string Id) : IQuery<ReviewDto>;
+public record GetReviewByIdQuery(string Id) : IQuery<ReviewDto>, ICacheableQuery
+{
+    string ICacheableQuery.CacheKey => ReviewCacheKeys.Review(Id);
+    CachePolicy ICacheableQuery.Policy => CachePolicy.Review;
+    bool ICacheableQuery.VersionedList => false;
+}
 
 public class GetReviewByIdQueryHandler(IReviewQueries queries) : IRequestHandler<GetReviewByIdQuery, ReviewDto>
 {

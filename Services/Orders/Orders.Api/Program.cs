@@ -3,9 +3,14 @@ using Orders.Bll.Mapping;
 using Orders.Bll.Services;
 using Orders.Dal;
 using Orders.Dal.Abstractions;
+using Orders.Api.GrpcServices;
+using Platform.ServiceDefaults;
+using Orders.Api.Metrics;
+using Orders.Bll.Caching;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
+builder.AddRedisDistributedCache("redis");
 
 // –€док п≥дключенн€: appsettings.json, перекритий user-secrets або зм≥нною оточенн€
 // ConnectionStrings__OrdersDb. якщо його немаЇ, застосунок не стартуЇ.
@@ -23,6 +28,12 @@ builder.Services.AddAutoMapper(cfg =>
     cfg.AddProfile<ProductProfile>();
 });
 
+builder.Services.AddGrpc(o =>
+{
+    o.EnableDetailedErrors = builder.Environment.IsDevelopment();
+    o.Interceptors.Add<GrpcLoggingInterceptor>();
+});
+
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
@@ -37,7 +48,18 @@ builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+builder.Services.AddMemoryCache(o =>
+{
+    o.SizeLimit = 10_000;
+    o.CompactionPercentage = 0.20;
+    o.ExpirationScanFrequency = TimeSpan.FromSeconds(30);
+});
+builder.Services.AddSingleton<ICacheMetrics, CacheMetrics>();
+builder.Services.AddSingleton<ITwoLevelCache, TwoLevelCache>();
+
 var app = builder.Build();
+
+
 app.UseCorrelationId();
 app.MapDefaultEndpoints();
 
@@ -54,6 +76,7 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
+app.MapGrpcService<OrdersGrpcService>();
 
 app.Logger.LogInformation("Orders API started");
 

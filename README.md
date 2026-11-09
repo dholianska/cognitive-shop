@@ -452,3 +452,53 @@ curl -i http://localhost:5000/api/aggregator/orders/1/full
 | `Login failed for user 'sa'` | Змінили `sql-password`, а volume SQL Server зберігає старий пароль: видаліть volume контейнера `sql` і запустіть знову |
 | `OrdersDb` порожня, замовлення не знаходяться | Не виконано скрипти `db/p1` (див. крок 3 запуску) |
 | Порт 5000 зайнятий | Звільніть порт або змініть `port: 5000` для Gateway в `Platform.AppHost/Program.cs` |
+
+
+
+---
+
+# Лаб. 06: Кешування та gRPC
+
+Лаб. 06 розширює платформу з Лаб. 05: кеш у пам'яті та в Redis, gRPC-контракти в мікросервісах, Aggregator на gRPC.
+
+## Redis
+
+Redis запускається з AppHost автоматично (контейнер `redis` із постійним volume). Сервіси `orders-api`, `catalog-api`, `reviews-api` і `aggregator` отримують рядок підключення `ConnectionStrings:redis` від Aspire. Окремо налаштовувати нічого не треба: достатньо `dotnet run --project Platform.AppHost` (Docker Desktop запущений).
+
+## Кешування
+
+Схема читання: **L1 (IMemoryCache) → L2 (Redis) → БД**, проміжні рівні заповнюються на зворотному шляху; L1 завжди коротший за L2. Якщо Redis недоступний, сервіси працюють без нього (повільніше). Метрики `cache.hits` / `cache.misses` (тег `cache.level`) видно в Aspire Dashboard → Metrics.
+
+| Сервіс | Що кешується | L1 (пам'ять) | L2 (Redis) | Інвалідація |
+|---|---|---|---|---|
+| Catalog | картка товару `catalog:product:{id}`, список категорій | 1 хв / 5 хв | 10 хв / 1 год | після зміни ціни, залишків, категорій, видалення |
+| Orders | замовлення `orders:order:{id}` (персональні дані, тому TTL короткі) | 15 с | 60 с | після підтвердження, зміни статусу, видалення |
+| Reviews | відгук `reviews:review:{id}`, сторінки списків `reviews:list:…` | 1 хв / 30 с | 10 хв / 5 хв | після створення, зміни, видалення відгуку і коментаря (списки: ключ-версія) |
+| Aggregator | агрегована картка замовлення `aggregator:order:{id}:full` | немає | 30 с | лише TTL; часткові відповіді не кешуються |
+
+## gRPC
+
+Контракти лежать у `Services/Catalog/Catalog.Api/Protos`, `Services/Orders/Orders.Api/Protos`, `Services/Reviews/Reviews.WebApi/Protos`. gRPC-сервіси (`*/Grpc/`) є адаптерами над бізнес-логікою і повертають `RpcException` з кодами `NotFound` / `InvalidArgument`. Aggregator викликає сервіси через gRPC (типізовані клієнти із service discovery, паралельні виклики через `Task.WhenAll`, часткові відмови як попередження). Для порівняння лишено HTTP-версію з Лаб. 05:
+
+```bash
+curl -i http://localhost:5000/api/aggregator/orders/1/full                  # gRPC + кеш Redis (30 с)
+curl -i "http://localhost:5000/api/aggregator/orders/1/full?noCache=true"   # gRPC без кешу
+curl -i http://localhost:5000/api/aggregator/orders/1/full/http             # HTTP (Лаб. 05)
+```
+
+gRPC працює поверх HTTP/2 на HTTPS-ендпоінтах сервісів: потрібен довірений dev-сертифікат (`dotnet dev-certs https --trust`), AppHost запускається з профілем `https`.
+
+## Порівняння HTTP та gRPC
+
+| Шлях | Середня тривалість агрегувального запиту |
+|---|---|
+| HTTP (Лаб. 05) | _заповнити за результатами вимірювань_ |
+| gRPC | _заповнити за результатами вимірювань_ |
+
+## Таблиця дублювання (доповнення)
+
+| Що дублюється | Де | Чому |
+|---|---|---|
+| `TwoLevelCache`, `ICacheMetrics`, `CachePolicy`, `CacheKeys` | `Catalog.Bll/Caching`, `Orders.Bll/Caching`, `Reviews.Application/Caching` | сервіси незалежні, спільної бібліотеки між ними немає |
+| `CacheMetrics` (Meter `<Сервіс>.Cache`) | `Catalog.Api/Metrics`, `Orders.Api/Metrics`, `Reviews.WebApi/Metrics` | те саме |
+| gRPC-адаптери та `.proto` | `Catalog.Api`, `Orders.Api`, `Reviews.WebApi` | кожен сервіс володіє власним контрактом; Aggregator посилається на ті самі файли |

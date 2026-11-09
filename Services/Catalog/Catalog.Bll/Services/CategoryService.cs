@@ -2,13 +2,16 @@ using AutoMapper;
 using Catalog.Bll.Dtos;
 using Catalog.Dal.Abstractions;
 using Catalog.Domain.Exceptions;
+using Catalog.Bll.Caching;
 
 namespace Catalog.Bll.Services;
 
-public sealed class CategoryService(IUnitOfWork uow, IMapper mapper) : ICategoryService
+public sealed class CategoryService(IUnitOfWork uow, IMapper mapper, ITwoLevelCache cache) : ICategoryService
 {
     public async Task<IReadOnlyList<CategoryDto>> GetAllAsync(CancellationToken ct = default)
-        => mapper.Map<List<CategoryDto>>(await uow.Categories.GetAllAsync(ct));
+        => await cache.GetOrCreateAsync<IReadOnlyList<CategoryDto>>(
+               CacheKeys.Categories, CachePolicy.Categories,
+               async c => mapper.Map<List<CategoryDto>>(await uow.Categories.GetAllAsync(c)), ct) ?? [];
 
     public async Task<CategoryWithProductsDto> GetWithProductsAsync(int id, CancellationToken ct = default)
     {

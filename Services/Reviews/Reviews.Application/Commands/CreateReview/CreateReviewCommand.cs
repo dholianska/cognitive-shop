@@ -5,6 +5,7 @@ using Reviews.Domain.Interfaces;
 using Reviews.Domain.ValueObjects;
 using System.Diagnostics;
 using Microsoft.Extensions.Logging;
+using Reviews.Application.Caching;
 
 namespace Reviews.Application.Commands.CreateReview;
 
@@ -12,7 +13,11 @@ namespace Reviews.Application.Commands.CreateReview;
 public record CreateReviewCommand(
     long ProductId, string ProductName,
     string AuthorId, string AuthorName,
-    int Rating, string Text) : ICommand<string>;
+    int Rating, string Text) : ICommand<string>, ICacheInvalidatingCommand
+{
+    string? ICacheInvalidatingCommand.ReviewId => null;   // нового відгуку в кеші ще нема
+    string ICacheInvalidatingCommand.Reason => "ReviewCreated";
+}
 
 public class CreateReviewCommandHandler(IReviewRepository reviews, ILogger<CreateReviewCommandHandler> logger)
     : IRequestHandler<CreateReviewCommand, string>

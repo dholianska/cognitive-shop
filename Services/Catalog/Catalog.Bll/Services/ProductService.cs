@@ -7,10 +7,11 @@ using Microsoft.Extensions.Logging;
 using Catalog.Dal.Specifications;
 using Catalog.Domain.Queries;
 using System.Diagnostics;
+using Catalog.Bll.Caching;
 
 namespace Catalog.Bll.Services;
 
-public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<ProductService> logger)
+public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCache cache, ILogger<ProductService> logger)
     : IProductService
 {
     private static readonly ActivitySource Source = new("Catalog.Api");
@@ -42,10 +43,14 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
 
     public async Task<ProductCardDto> GetByIdAsync(int id, CancellationToken ct = default)
     {
-        // Eager Loading: товар, деталі, зображення й категорії одним запитом
-        var product = await uow.Products.GetWithDetailsAsync(id, ct)
-                    ?? throw new EntityNotFoundException($"Product {id} not found");
-        return mapper.Map<ProductCardDto>(product);
+        var dto = await cache.GetOrCreateAsync(CacheKeys.Product(id), CachePolicy.ProductCard, async c =>
+        {
+            // Eager Loading: товар, деталі, зображення, категорії
+            var product = await uow.Products.GetWithDetailsAsync(id, c);
+            return product is null ? null : mapper.Map<ProductCardDto>(product);
+        }, ct);
+
+        return dto ?? throw new EntityNotFoundException($"Product {id} not found");
     }
 
     public async Task<ProductDto> CreateAsync(CreateProductDto input, CancellationToken ct = default)
@@ -78,6 +83,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
 
         product.ChangePrice(newPrice);         // інваріант у сутності
         await uow.SaveChangesAsync(ct);         // контекст сам помітив зміну: Update() не потрібен
+        await InvalidateAsync(id, "PriceChanged", ct);
 
         logger.LogInformation("Product {ProductId} price changed from {OldPrice} to {NewPrice}",
             id, oldPrice, newPrice);
@@ -88,6 +94,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
         var product = await GetTrackedAsync(id, ct);
         product.AddStock(quantity);
         await uow.SaveChangesAsync(ct);
+        await InvalidateAsync(id, "StockAdded", ct);
     }
 
     public async Task RemoveStockAsync(int id, int quantity, CancellationToken ct = default)
@@ -95,6 +102,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
         var product = await GetTrackedAsync(id, ct);
         product.RemoveStock(quantity);          // нестача товару: DomainException (409)
         await uow.SaveChangesAsync(ct);
+        await InvalidateAsync(id, "StockRemoved", ct);
     }
 
     /// <summary>M:N: додає товар у категорію (дату AddedAt проставляє база).</summary>
@@ -108,6 +116,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
 
         product.AddToCategory(categoryId);      // дубль: DomainException (409)
         await uow.SaveChangesAsync(ct);
+        await InvalidateAsync(productId, "CategoryAssigned", ct);
     }
 
     public async Task DeleteAsync(int id, CancellationToken ct = default)
@@ -115,6 +124,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
         var product = await GetTrackedAsync(id, ct);
         uow.Products.Delete(product);           // деталі, зображення й зв'язки з категоріями видалить каскад
         await uow.SaveChangesAsync(ct);
+        await InvalidateAsync(id, "ProductDeleted", ct);
 
         logger.LogInformation("Product {ProductId} deleted", id);
     }
@@ -122,4 +132,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
     private async Task<Product> GetTrackedAsync(int id, CancellationToken ct)
         => await uow.Products.GetByIdAsync(id, ct)
            ?? throw new EntityNotFoundException($"Product {id} not found");
+
+    private Task InvalidateAsync(int id, string reason, CancellationToken ct)
+    => cache.RemoveAsync(CacheKeys.Product(id), reason, ct);
 }
