@@ -7,9 +7,12 @@ using Catalog.Dal.Abstractions;
 using Microsoft.EntityFrameworkCore;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
+using Catalog.Api.Metrics;
+using Catalog.Bll.Caching;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
+builder.AddRedisDistributedCache("redis");   // IDistributedCache поверх Redis; р€док п≥дключенн€ передаЇ Aspire
 
 // –€док п≥дключенн€: appsettings.json, перекритий user-secrets або зм≥нною оточенн€
 // ConnectionStrings__CatalogDb. якщо його немаЇ, застосунок не стартуЇ.
@@ -38,6 +41,9 @@ builder.Services.AddMemoryCache(o =>
     o.CompactionPercentage = 0.20;                        // при переповненн≥ вит≥сн€Їмо 20 % запис≥в
     o.ExpirationScanFrequency = TimeSpan.FromSeconds(30); // €к часто чистити прострочен≥
 });
+
+builder.Services.AddSingleton<ICacheMetrics, CacheMetrics>();
+builder.Services.AddSingleton<ITwoLevelCache, TwoLevelCache>();
 
 // вал≥датори (FluentValidation) реЇструютьс€ з зб≥рки й викликаютьс€ в контролерах €вно
 builder.Services.AddValidatorsFromAssemblyContaining<CreateProductDtoValidator>();

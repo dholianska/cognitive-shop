@@ -81,7 +81,8 @@ public static class Extensions
             .WithMetrics(m => m
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
-                .AddRuntimeInstrumentation())
+                .AddRuntimeInstrumentation()
+                .AddMeter("*.Cache"))
             .WithTracing(t =>
             {
                 t.AddSource(builder.Environment.ApplicationName)                    // власні spans (3.3)
