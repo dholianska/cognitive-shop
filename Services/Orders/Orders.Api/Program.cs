@@ -38,6 +38,7 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+app.UseCorrelationId();
 app.MapDefaultEndpoints();
 
 // перевірка мапінгу при старті: одразу видно, якщо в DTO є поле без пари в моделі
