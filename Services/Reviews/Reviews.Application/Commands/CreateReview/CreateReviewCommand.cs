@@ -3,6 +3,8 @@ using Reviews.Application.Common.Interfaces;
 using Reviews.Domain.Entities;
 using Reviews.Domain.Interfaces;
 using Reviews.Domain.ValueObjects;
+using System.Diagnostics;
+using Microsoft.Extensions.Logging;
 
 namespace Reviews.Application.Commands.CreateReview;
 
@@ -12,11 +14,16 @@ public record CreateReviewCommand(
     string AuthorId, string AuthorName,
     int Rating, string Text) : ICommand<string>;
 
-public class CreateReviewCommandHandler(IReviewRepository reviews)
+public class CreateReviewCommandHandler(IReviewRepository reviews, ILogger<CreateReviewCommandHandler> logger)
     : IRequestHandler<CreateReviewCommand, string>
 {
+    private static readonly ActivitySource Source = new("Reviews.WebApi");
+
     public async Task<string> Handle(CreateReviewCommand cmd, CancellationToken ct)
     {
+        using var activity = Source.StartActivity("CreateReview");
+        activity?.SetTag("product.id", cmd.ProductId);
+
         // правила модел≥ д≥ють ≥ тут: Value Objects та сутн≥сть перев≥р€ють дан≥ в конструкторах
         var review = new Review(
             cmd.ProductId, cmd.ProductName,
@@ -25,6 +32,10 @@ public class CreateReviewCommandHandler(IReviewRepository reviews)
             cmd.Text);
 
         await reviews.AddAsync(review, ct);
+
+        logger.LogInformation("Review {ReviewId} created for product {ProductId}, rating {Rating}",
+            review.Id, cmd.ProductId, cmd.Rating);
+
         return review.Id.ToString();
     }
 }

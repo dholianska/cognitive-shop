@@ -5,11 +5,14 @@ using Orders.Bll.Dtos;
 using Orders.Dal.Abstractions;
 using Orders.Domain.Exceptions;
 using Orders.Domain.Models;
+using System.Diagnostics;
 
 namespace Orders.Bll.Services;
 
 public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderService> logger) : IOrderService
 {
+    private static readonly ActivitySource Source = new("Orders.Api");
+
     private static readonly HashSet<string> KnownStatuses = new()
     {
         OrderStatus.Submitted, OrderStatus.AwaitingValidation, OrderStatus.StockConfirmed,
@@ -37,6 +40,9 @@ public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderS
     /// </summary>
     public async Task<OrderDto> CreateAsync(CreateOrderDto input, CancellationToken ct = default)
     {
+        using var activity = Source.StartActivity("CreateOrder");
+        activity?.SetTag("customer.id", input.CustomerId);
+
         // однакові товари складаємо в одну позицію
         var lines = input.Items
             .GroupBy(i => i.ProductId)
@@ -55,7 +61,7 @@ public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderS
             foreach (var line in lines)
             {
                 var product = await uow.Products.GetByIdAsync(line.ProductId, ct)
-                              ?? throw new NotFoundException($"Product {line.ProductId} not found");
+                            ?? throw new NotFoundException($"Product {line.ProductId} not found");
 
                 // раннє попередження; остаточне списання залишку (атомарне) відбувається при підтвердженні
                 if (product.Stock < line.Units)
@@ -102,6 +108,9 @@ public sealed class OrderService(IUnitOfWork uow, IMapper mapper, ILogger<OrderS
     /// </summary>
     public async Task ConfirmOrderAsync(long orderId, CancellationToken ct = default)
     {
+        using var activity = Source.StartActivity("ConfirmOrder");
+        activity?.SetTag("order.id", orderId);
+
         await uow.BeginTransactionAsync(IsolationLevel.ReadCommitted, ct);
         try
         {
