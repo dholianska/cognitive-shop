@@ -1,3 +1,4 @@
+
 syntax = "proto3";
 
 option csharp_namespace = "Catalog.Grpc";
@@ -8,23 +9,30 @@ package catalog;
 service CatalogService {
   // Картка одного товару. NotFound, якщо товару немає
   rpc GetProduct (GetProductRequest) returns (ProductReply);
+
   // Пакетне читання: відсутні товари пропускаються
   rpc GetProductsByIds (GetProductsByIdsRequest) returns (ProductsReply);
 }
 
-message GetProductRequest { int32 id = 1; }
+message GetProductRequest {
+  int32 id = 1;
+}
 
-message GetProductsByIdsRequest { repeated int32 ids = 1; }
+message GetProductsByIdsRequest {
+  repeated int32 ids = 1;
+}
 
 message ProductReply {
   int32 id = 1;
   string name = 2;
   string sku = 3;
-  double price = 4;            // для грошей у production краще окремий message з units/nanos
+  double price = 4;
   int32 available_stock = 5;
   optional string description = 6;
   optional string manufacturer = 7;
   repeated string categories = 8;
 }
 
-message ProductsReply { repeated ProductReply products = 1; }
+message ProductsReply {
+  repeated ProductReply products = 1;
+}

@@ -1,3 +1,4 @@
+
 syntax = "proto3";
 
 option csharp_namespace = "Reviews.Grpc";
@@ -12,7 +13,7 @@ service ReviewsService {
 
 message GetForProductsRequest {
   repeated int64 product_ids = 1;
-  int32 page_size = 2;          // відгуків на товар; 0 = значення за замовчуванням (20)
+  int32 page_size = 2;
 }
 
 message ReviewReply {
@@ -25,4 +26,6 @@ message ReviewReply {
   int32 comments_count = 7;
 }
 
-message ReviewsReply { repeated ReviewReply reviews = 1; }
+message ReviewsReply {
+  repeated ReviewReply reviews = 1;
+}

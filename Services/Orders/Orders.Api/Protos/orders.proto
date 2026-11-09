@@ -1,3 +1,4 @@
+
 syntax = "proto3";
 
 import "google/protobuf/timestamp.proto";
@@ -12,7 +13,9 @@ service OrdersService {
   rpc GetOrder (GetOrderRequest) returns (OrderReply);
 }
 
-message GetOrderRequest { int64 id = 1; }
+message GetOrderRequest {
+  int64 id = 1;
+}
 
 message OrderItemReply {
   int64 product_id = 1;
