@@ -6,12 +6,14 @@ using Catalog.Domain.Exceptions;
 using Microsoft.Extensions.Logging;
 using Catalog.Dal.Specifications;
 using Catalog.Domain.Queries;
+using System.Diagnostics;
 
 namespace Catalog.Bll.Services;
 
 public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<ProductService> logger)
     : IProductService
 {
+    private static readonly ActivitySource Source = new("Catalog.Api");
     private const int MaxPageSize = 100;
 
     /// <summary>
@@ -42,7 +44,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
     {
         // Eager Loading: товар, деталі, зображення й категорії одним запитом
         var product = await uow.Products.GetWithDetailsAsync(id, ct)
-                      ?? throw new EntityNotFoundException($"Product {id} not found");
+                    ?? throw new EntityNotFoundException($"Product {id} not found");
         return mapper.Map<ProductCardDto>(product);
     }
 
@@ -68,10 +70,13 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
 
     public async Task ChangePriceAsync(int id, decimal newPrice, CancellationToken ct = default)
     {
+        using var activity = Source.StartActivity("ChangePrice");
+        activity?.SetTag("product.id", id);
+
         var product = await GetTrackedAsync(id, ct);
         var oldPrice = product.Price;
 
-        product.ChangePrice(newPrice);          // інваріант у сутності
+        product.ChangePrice(newPrice);         // інваріант у сутності
         await uow.SaveChangesAsync(ct);         // контекст сам помітив зміну: Update() не потрібен
 
         logger.LogInformation("Product {ProductId} price changed from {OldPrice} to {NewPrice}",
@@ -96,7 +101,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ILogger<Prod
     public async Task AssignCategoryAsync(int productId, int categoryId, CancellationToken ct = default)
     {
         var product = await uow.Products.GetWithDetailsAsync(productId, ct)   // з уже завантаженими категоріями
-                      ?? throw new EntityNotFoundException($"Product {productId} not found");
+                    ?? throw new EntityNotFoundException($"Product {productId} not found");
 
         _ = await uow.Categories.GetByIdAsync(categoryId, ct)
             ?? throw new EntityNotFoundException($"Category {categoryId} not found");

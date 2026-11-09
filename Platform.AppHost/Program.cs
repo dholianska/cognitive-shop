@@ -1,19 +1,35 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
-// Пароль адміністратора SQL Server береться з секретів AppHost, у репозиторії його немає.
+// Пароль SQL Server: секрет AppHost (user-secrets), не в коді
 var sqlPassword = builder.AddParameter("sql-password", secret: true);
 
-// SQL Server у контейнері. Фіксований порт 14330 дозволяє підключитися з SSMS/Visual Studio,
-// щоб застосувати скрипти з Лаб. 01. WithDataVolume зберігає дані між перезапусками.
 var sql = builder.AddSqlServer("sql", sqlPassword, port: 14330)
     .WithDataVolume();
 
-// Ім'я ресурсу "OrdersDb" збігається з ім'ям рядка підключення в API
-// (GetConnectionString("OrdersDb")), тому Aspire передасть його в API автоматично.
-var ordersDb = sql.AddDatabase("OrdersDb");
+var ordersDb = sql.AddDatabase("OrdersDb");    // Лаб. 02
+var catalogDb = sql.AddDatabase("CatalogDb");   // Лаб. 03
 
-builder.AddProject<Projects.Orders_Api>("orders-api")
-    .WithReference(ordersDb)
-    .WaitFor(ordersDb);
+var mongo = builder.AddMongoDB("mongo")
+    .WithDataVolume();
+var reviewsDb = mongo.AddDatabase("ReviewsDb"); // Лаб. 04
+
+var orders = builder.AddProject<Projects.Orders_Api>("orders-api")
+    .WithReference(ordersDb).WaitFor(ordersDb);
+
+var catalog = builder.AddProject<Projects.Catalog_Api>("catalog-api")
+    .WithReference(catalogDb).WaitFor(catalogDb);
+
+var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
+    .WithReference(reviewsDb).WaitFor(reviewsDb);
+
+var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
+    .WithReference(orders).WithReference(catalog).WithReference(reviews)
+    .WaitFor(orders).WaitFor(catalog).WaitFor(reviews);
+
+builder.AddProject<Projects.Platform_ApiGateway>("gateway")
+    .WithHttpEndpoint(port: 5000, name: "public")
+    .WithReference(orders).WithReference(catalog).WithReference(reviews)
+    .WithReference(aggregator)
+    .WaitFor(aggregator);
 
 builder.Build().Run();

@@ -3,14 +3,14 @@ using Reviews.Application.Common.Mappings;
 using Reviews.Infrastructure;
 using Reviews.WebApi;
 using Reviews.WebApi.Health;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
 
-builder.Host.UseSerilog((ctx, cfg) => cfg
-    .ReadFrom.Configuration(ctx.Configuration)
-    .Enrich.FromLogContext()
-    .WriteTo.Console());
+// Aspire передає ConnectionStrings:ReviewsDb; кладемо його туди, звідки його читає Лаб. 04
+var mongoCs = builder.Configuration.GetConnectionString("ReviewsDb");
+if (!string.IsNullOrWhiteSpace(mongoCs))
+    builder.Configuration["MongoDb:ConnectionString"] = mongoCs;
 
 // кожен шар надає власний метод розширення
 builder.Services
@@ -37,13 +37,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+app.UseCorrelationId();
+app.MapDefaultEndpoints();
 
 // перевірка мапінгу при старті: одразу видно, якщо в DTO є поле без пари в сутності
 if (app.Environment.IsDevelopment())
     app.Services.GetRequiredService<AutoMapper.IConfigurationProvider>().AssertConfigurationIsValid();
 
 app.UseExceptionHandler();
-app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
@@ -52,8 +53,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.MapControllers();
-app.MapHealthChecks("/health");
-
 app.Logger.LogInformation("Reviews API started");
 
 app.Run();

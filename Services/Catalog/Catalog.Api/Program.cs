@@ -5,24 +5,16 @@ using Catalog.Bll.Validators;
 using Catalog.Dal;
 using Catalog.Dal.Abstractions;
 using Microsoft.EntityFrameworkCore;
-using Serilog;
-using Serilog.Events;
 using FluentValidation;
 using Microsoft.Extensions.DependencyInjection;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
 
 // Рядок підключення: appsettings.json, перекритий user-secrets або змінною оточення
 // ConnectionStrings__CatalogDb. Якщо його немає, застосунок не стартує.
 var connectionString = builder.Configuration.GetConnectionString("CatalogDb")
     ?? throw new InvalidOperationException("Connection string 'CatalogDb' is missing");
-
-builder.Host.UseSerilog((ctx, cfg) => cfg
-    .ReadFrom.Configuration(ctx.Configuration)
-    .MinimumLevel.Override("Microsoft.EntityFrameworkCore.Database.Command",
-                           LogEventLevel.Information)   // SQL-запити EF Core
-    .Enrich.FromLogContext()
-    .WriteTo.Console());
 
 builder.Services.AddDbContext<AppDbContext>(o => o.UseSqlServer(connectionString));
 
@@ -55,6 +47,8 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+app.UseCorrelationId();
+app.MapDefaultEndpoints();
 
 // перевірка мапінгу при старті: одразу видно, якщо в DTO є поле без пари в сутності
 if (app.Environment.IsDevelopment())
@@ -71,8 +65,6 @@ using (var scope = app.Services.CreateScope())
 }
 
 app.UseExceptionHandler();
-app.UseSerilogRequestLogging(o => o.EnrichDiagnosticContext = (diag, http) =>
-    diag.Set("CorrelationId", http.TraceIdentifier));
 
 if (app.Environment.IsDevelopment())
 {

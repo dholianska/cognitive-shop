@@ -2,6 +2,7 @@ using Microsoft.Extensions.Options;
 using MongoDB.Bson;
 using MongoDB.Driver;
 using Reviews.Domain.Entities;
+using MongoDB.Driver.Core.Extensions.DiagnosticSources;
 
 namespace Reviews.Infrastructure.Persistence;
 
@@ -22,7 +23,9 @@ public class MongoDbContext
         if (string.IsNullOrWhiteSpace(settings.DatabaseName))
             throw new InvalidOperationException("MongoDb:DatabaseName is missing");
 
-        var client = new MongoClient(settings.ConnectionString);
+        var mongoSettings = MongoClientSettings.FromConnectionString(settings.ConnectionString);
+        mongoSettings.ClusterConfigurator = cb => cb.Subscribe(new DiagnosticsActivityEventSubscriber());
+        var client = new MongoClient(mongoSettings);
         Database = client.GetDatabase(settings.DatabaseName);
     }
 

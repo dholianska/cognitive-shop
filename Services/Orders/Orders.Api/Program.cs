@@ -3,19 +3,14 @@ using Orders.Bll.Mapping;
 using Orders.Bll.Services;
 using Orders.Dal;
 using Orders.Dal.Abstractions;
-using Serilog;
 
 var builder = WebApplication.CreateBuilder(args);
+builder.AddServiceDefaults();
 
 // Рядок підключення: appsettings.json, перекритий user-secrets або змінною оточення
 // ConnectionStrings__OrdersDb. Якщо його немає, застосунок не стартує.
 var connectionString = builder.Configuration.GetConnectionString("OrdersDb")
     ?? throw new InvalidOperationException("Connection string 'OrdersDb' is missing");
-
-builder.Host.UseSerilog((ctx, cfg) => cfg
-    .ReadFrom.Configuration(ctx.Configuration)
-    .Enrich.FromLogContext()
-    .WriteTo.Console());
 
 // Scoped: один Unit of Work (і одне з'єднання з БД) на HTTP-запит
 builder.Services.AddScoped<IUnitOfWork>(_ => new UnitOfWork(connectionString));
@@ -43,13 +38,14 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 var app = builder.Build();
+app.UseCorrelationId();
+app.MapDefaultEndpoints();
 
 // перевірка мапінгу при старті: одразу видно, якщо в DTO є поле без пари в моделі
 if (app.Environment.IsDevelopment())
     app.Services.GetRequiredService<AutoMapper.IConfigurationProvider>().AssertConfigurationIsValid();
 
 app.UseExceptionHandler();
-app.UseSerilogRequestLogging();
 
 if (app.Environment.IsDevelopment())
 {
