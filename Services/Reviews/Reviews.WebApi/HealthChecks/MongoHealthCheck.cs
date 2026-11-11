@@ -3,10 +3,10 @@ using MongoDB.Bson;
 using MongoDB.Driver;
 using Reviews.Infrastructure.Persistence;
 
-namespace Reviews.WebApi.Health;
+namespace Reviews.WebApi.HealthChecks;
 
-/// <summary>Перевіряє зв'язок із MongoDB командою ping.</summary>
-public class MongoHealthCheck(MongoDbContext context) : IHealthCheck
+/// <summary>Легка перевірка MongoDB: команда ping. Без побічних ефектів.</summary>
+public sealed class MongoHealthCheck(MongoDbContext context) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext healthContext, CancellationToken ct = default)
     {
@@ -15,9 +15,9 @@ public class MongoHealthCheck(MongoDbContext context) : IHealthCheck
             await context.Database.RunCommandAsync<BsonDocument>(new BsonDocument("ping", 1), cancellationToken: ct);
             return HealthCheckResult.Healthy("MongoDB is reachable");
         }
-        catch (Exception ex)
+        catch (Exception ex) when (ex is not OperationCanceledException)   // таймаут реєстрації обробляє фреймворк
         {
-            return HealthCheckResult.Unhealthy("MongoDB is unreachable", ex);
+            return new HealthCheckResult(healthContext.Registration.FailureStatus, "MongoDB is unreachable", ex);
         }
     }
 }

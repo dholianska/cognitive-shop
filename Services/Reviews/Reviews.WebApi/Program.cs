@@ -2,15 +2,16 @@
 using Reviews.Application.Common.Mappings;
 using Reviews.Infrastructure;
 using Reviews.WebApi;
-using Reviews.WebApi.Health;
 using Reviews.WebApi.GrpcServices;
 using Platform.ServiceDefaults;
 using Reviews.Application.Caching;
 using Reviews.WebApi.Metrics;
+using Reviews.WebApi.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-builder.AddRedisDistributedCache("redis");
+builder.AddRedisDistributedCache("redis", s => s.DisableHealthChecks = true);   // власну перевірку (Degraded) реєструємо нижче
 
 // Aspire передає ConnectionStrings:ReviewsDb; кладемо його туди, звідки його читає Лаб. 04
 var mongoCs = builder.Configuration.GetConnectionString("ReviewsDb");
@@ -42,7 +43,18 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
     ctx.ProblemDetails.Extensions["traceId"] = ctx.HttpContext.TraceIdentifier);
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 
-builder.Services.AddHealthChecks().AddCheck<MongoHealthCheck>("mongodb");
+builder.Services.AddHealthChecks()
+    .AddCheck<MongoHealthCheck>("reviews-db",
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["database", "mongodb", "ready"],
+        timeout: TimeSpan.FromSeconds(5))
+    .AddCheck<RedisHealthCheck>("redis-cache",
+        failureStatus: HealthStatus.Degraded,
+        tags: ["cache", "redis", "ready"],
+        timeout: TimeSpan.FromSeconds(5));
+
+builder.Services.AddGrpcHealthChecks(o =>
+    o.Services.MapService("", r => r.Tags.Contains("ready") && !r.Tags.Contains("cache")));
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
@@ -74,6 +86,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapGrpcService<ReviewsGrpcService>();
+app.MapGrpcHealthChecksService();
 app.Logger.LogInformation("Reviews API started");
 
 app.Run();
