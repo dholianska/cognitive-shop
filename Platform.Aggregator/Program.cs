@@ -19,9 +19,12 @@ builder.Services.AddOpenApi();
 builder.Services.AddGrpcClients();
 
 // HTTP-клієнти з Лаб. 05 (лишені для порівняння HTTP і gRPC)
-builder.Services.AddHttpClient<OrdersClient>(c => c.BaseAddress = new("https+http://orders-api"));
-builder.Services.AddHttpClient<CatalogClient>(c => c.BaseAddress = new("https+http://catalog-api"));
-builder.Services.AddHttpClient<ReviewsClient>(c => c.BaseAddress = new("https+http://reviews-api"));
+builder.Services.AddHttpClient<OrdersClient>(c => c.BaseAddress = new("https+http://orders-api"))
+    .AddResilience("orders-api", ResiliencePolicies.Critical);
+builder.Services.AddHttpClient<CatalogClient>(c => c.BaseAddress = new("https+http://catalog-api"))
+    .AddResilience("catalog-api", ResiliencePolicies.Critical);
+builder.Services.AddHttpClient<ReviewsClient>(c => c.BaseAddress = new("https+http://reviews-api"))
+    .AddResilience("reviews-api", ResiliencePolicies.NonCritical);
 
 builder.Services.AddSingleton<AggregatorCacheMetrics>();
 builder.Services.AddScoped<OrderAggregationService>();        // HTTP (Лаб. 05)
@@ -29,6 +32,8 @@ builder.Services.AddScoped<GrpcOrderAggregationService>();    // gRPC
 builder.Services.AddScoped<CachedOrderAggregationService>();  // gRPC + Redis
 
 var app = builder.Build();
+
+ResiliencePolicies.Logger = app.Services.GetRequiredService<ILoggerFactory>().CreateLogger("Resilience");
 
 app.UseCorrelationId();
 
