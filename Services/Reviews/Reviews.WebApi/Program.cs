@@ -54,6 +54,7 @@ builder.Services.AddMemoryCache(o =>
     o.ExpirationScanFrequency = TimeSpan.FromSeconds(30);
 });
 builder.Services.AddSingleton<ICacheMetrics, CacheMetrics>();
+builder.Services.AddSingleton<ReviewMetrics>();
 
 var app = builder.Build();
 app.UseCorrelationId();
