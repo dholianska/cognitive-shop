@@ -2,11 +2,12 @@ using System.Text.Json.Serialization;
 using Platform.Aggregator.Clients;
 using Platform.Aggregator.Metrics;
 using Platform.Aggregator.Services;
+using Platform.Aggregator.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 
 builder.AddServiceDefaults();
-builder.AddRedisDistributedCache("redis");   // IDistributedCache для кешу агрегованих відповідей
+builder.AddRedisDistributedCache("redis", s => s.DisableHealthChecks = true);   // власну перевірку (Degraded) реєструємо нижче
 
 builder.Services.ConfigureHttpJsonOptions(o =>
     o.SerializerOptions.DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull);
@@ -17,6 +18,7 @@ builder.Services.AddOpenApi();
 
 // gRPC-клієнти (основний шлях)
 builder.Services.AddGrpcClients();
+builder.Services.AddDownstreamHealthChecks();   // gRPC Health Protocol для сервісів + Redis (Degraded)
 
 // HTTP-клієнти з Лаб. 05 (лишені для порівняння HTTP і gRPC)
 builder.Services.AddHttpClient<OrdersClient>(c => c.BaseAddress = new("https+http://orders-api"))
