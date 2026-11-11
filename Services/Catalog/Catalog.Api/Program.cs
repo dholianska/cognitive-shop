@@ -52,6 +52,7 @@ builder.Services.AddMemoryCache(o =>
 
 builder.Services.AddSingleton<ICacheMetrics, CacheMetrics>();
 builder.Services.AddSingleton<ITwoLevelCache, TwoLevelCache>();
+builder.Services.AddSingleton<CatalogMetrics>();
 
 // валідатори (FluentValidation) реєструються з збірки й викликаються в контролерах явно
 builder.Services.AddValidatorsFromAssemblyContaining<CreateProductDtoValidator>();
