@@ -124,14 +124,32 @@ public static class Extensions
 
     public static WebApplication MapDefaultEndpoints(this WebApplication app)
     {
+        // liveness: чи живий процес. Без зовнішніх залежностей, відповідає миттєво
+        app.MapHealthChecks("/health/live", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("live")
+        });
+
+        // readiness: чи готовий сервіс приймати трафік (БД, кеш, downstream); деталі в JSON
+        app.MapHealthChecks("/health/ready", new HealthCheckOptions
+        {
+            Predicate = check => check.Tags.Contains("ready"),
+            ResponseWriter = HealthCheckResponseWriter.WriteJsonAsync
+        });
+
+        // повні перевірки та /alive з шаблону лишаємо тільки для розробки
         if (app.Environment.IsDevelopment())
         {
-            app.MapHealthChecks(HealthEndpointPath);
+            app.MapHealthChecks(HealthEndpointPath, new HealthCheckOptions
+            {
+                ResponseWriter = HealthCheckResponseWriter.WriteJsonAsync
+            });
             app.MapHealthChecks(AlivenessEndpointPath, new HealthCheckOptions
             {
-                Predicate = r => r.Tags.Contains("live")
+                Predicate = check => check.Tags.Contains("live")
             });
         }
+
         return app;
     }
 }
