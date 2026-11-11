@@ -7,10 +7,12 @@ using Orders.Api.GrpcServices;
 using Platform.ServiceDefaults;
 using Orders.Api.Metrics;
 using Orders.Bll.Caching;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Orders.Api.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-builder.AddRedisDistributedCache("redis");
+builder.AddRedisDistributedCache("redis", s => s.DisableHealthChecks = true);   // власну перев≥рку (Degraded) реЇструЇмо нижче
 
 // –€док п≥дключенн€: appsettings.json, перекритий user-secrets або зм≥нною оточенн€
 // ConnectionStrings__OrdersDb. якщо його немаЇ, застосунок не стартуЇ.
@@ -58,6 +60,22 @@ builder.Services.AddSingleton<ICacheMetrics, CacheMetrics>();
 builder.Services.AddSingleton<ITwoLevelCache, TwoLevelCache>();
 builder.Services.AddSingleton<OrderMetrics>();
 
+builder.Services.AddHealthChecks()
+    .AddCheck("orders-db",
+        new SqlServerHealthCheck(builder.Configuration.GetConnectionString("OrdersDb")!),
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["database", "sql", "ready"],
+        timeout: TimeSpan.FromSeconds(5))
+    .AddCheck<RedisHealthCheck>("redis-cache",
+        failureStatus: HealthStatus.Degraded,                 // кеш необов'€зковий
+        tags: ["cache", "redis", "ready"],
+        timeout: TimeSpan.FromSeconds(5));
+
+// стандартний gRPC Health Checking Protocol.  еш (Degraded) не робить серв≥с ЂNotServingї дл€ Aggregator
+builder.Services.AddGrpcHealthChecks(o =>
+    o.Services.MapService("", r => r.Tags.Contains("ready") && !r.Tags.Contains("cache")));
+
+
 var app = builder.Build();
 
 
@@ -78,6 +96,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapGrpcService<OrdersGrpcService>();
+app.MapGrpcHealthChecksService();
 
 app.Logger.LogInformation("Orders API started");
 
