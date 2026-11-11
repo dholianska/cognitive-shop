@@ -56,6 +56,7 @@ builder.Services.AddMemoryCache(o =>
 });
 builder.Services.AddSingleton<ICacheMetrics, CacheMetrics>();
 builder.Services.AddSingleton<ITwoLevelCache, TwoLevelCache>();
+builder.Services.AddSingleton<OrderMetrics>();
 
 var app = builder.Build();
 
