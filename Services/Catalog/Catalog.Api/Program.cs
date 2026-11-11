@@ -11,10 +11,12 @@ using Catalog.Api.Metrics;
 using Catalog.Bll.Caching;
 using Catalog.Api.GrpcServices;
 using Platform.ServiceDefaults;
+using Catalog.Api.HealthChecks;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
-builder.AddRedisDistributedCache("redis");   // IDistributedCache поверх Redis; р€док п≥дключенн€ передаЇ Aspire
+builder.AddRedisDistributedCache("redis", s => s.DisableHealthChecks = true);   // власну перев≥рку (Degraded) реЇструЇмо нижче
 
 // –€док п≥дключенн€: appsettings.json, перекритий user-secrets або зм≥нною оточенн€
 // ConnectionStrings__CatalogDb. якщо його немаЇ, застосунок не стартуЇ.
@@ -69,6 +71,22 @@ builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+
+builder.Services.AddHealthChecks()
+    .AddCheck("catalog-db",
+        new SqlServerHealthCheck(builder.Configuration.GetConnectionString("CatalogDb")!),
+        failureStatus: HealthStatus.Unhealthy,
+        tags: ["database", "sql", "ready"],
+        timeout: TimeSpan.FromSeconds(5))
+    .AddCheck<RedisHealthCheck>("redis-cache",
+        failureStatus: HealthStatus.Degraded,
+        tags: ["cache", "redis", "ready"],
+        timeout: TimeSpan.FromSeconds(5));
+
+builder.Services.AddGrpcHealthChecks(o =>
+    o.Services.MapService("", r => r.Tags.Contains("ready") && !r.Tags.Contains("cache")));
+
+
 var app = builder.Build();
 app.UseCorrelationId();
 app.MapDefaultEndpoints();
@@ -97,6 +115,7 @@ if (app.Environment.IsDevelopment())
 
 app.MapControllers();
 app.MapGrpcService<CatalogGrpcService>();
+app.MapGrpcHealthChecksService();
 
 app.Logger.LogInformation("Catalog API started");
 
