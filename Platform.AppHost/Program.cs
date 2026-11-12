@@ -16,19 +16,28 @@ var reviewsDb = mongo.AddDatabase("ReviewsDb"); // Лаб. 04
 var redis = builder.AddRedis("redis")
     .WithDataVolume();
 
+// Лаб. 08: брокер повідомлень. Пароль фіксований секрет (як sql-password), користувач guest
+var rabbitPassword = builder.AddParameter("rabbit-password", secret: true);
+var rabbit = builder.AddRabbitMQ("messaging", password: rabbitPassword)
+    .WithDataVolume()                  // черги й повідомлення переживають перезапуск
+    .WithManagementPlugin(port: 15672); // Management UI: http://localhost:15672
+
 var orders = builder.AddProject<Projects.Orders_Api>("orders-api")
     .WithReference(ordersDb).WaitFor(ordersDb)
     .WithReference(redis).WaitFor(redis)
+    .WithReference(rabbit).WaitFor(rabbit)
     .WithHttpHealthCheck("/health/ready");
 
 var catalog = builder.AddProject<Projects.Catalog_Api>("catalog-api")
     .WithReference(catalogDb).WaitFor(catalogDb)
     .WithReference(redis).WaitFor(redis)
+    .WithReference(rabbit).WaitFor(rabbit)
     .WithHttpHealthCheck("/health/ready");
 
 var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
     .WithReference(reviewsDb).WaitFor(reviewsDb)
     .WithReference(redis).WaitFor(redis)
+    .WithReference(rabbit).WaitFor(rabbit)
     .WithHttpHealthCheck("/health/ready");
 
 var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
