@@ -8,13 +8,14 @@ using Reviews.Application.Common.Models;
 using Reviews.Application.Queries.GetReviewById;
 using Reviews.Application.Queries.GetReviewsList;
 using Reviews.WebApi.Contracts;
+using Reviews.WebApi.Metrics;
 
 namespace Reviews.WebApi.Controllers;
 
 /// <summary>Тонкий адаптер: усі операції виконує MediatR (ISender), тут немає ні бізнес-правил, ні MongoDB.</summary>
 [ApiController]
 [Route("api/reviews")]
-public class ReviewsController(ISender mediator) : ControllerBase
+public class ReviewsController(ISender mediator, ReviewMetrics metrics) : ControllerBase
 {
     /// <summary>Список відгуків: GET /api/reviews?productId=1&amp;page=1&amp;pageSize=10 (фільтр і пагінація в MongoDB).</summary>
     [HttpGet]
@@ -23,7 +24,8 @@ public class ReviewsController(ISender mediator) : ControllerBase
     public async Task<ActionResult<PagedResult<ReviewDto>>> GetList(
         [FromQuery] long? productId, [FromQuery] int page = 1, [FromQuery] int pageSize = 20,
         CancellationToken ct = default)
-        => Ok(await mediator.Send(new GetReviewsListQuery(productId, page, pageSize), ct));
+        => Ok(await metrics.MeasureAsync("list",
+            () => mediator.Send(new GetReviewsListQuery(productId, page, pageSize), ct)));
 
     /// <summary>Відгук за Id. Версія документа повертається в заголовку ETag (для If-Match).</summary>
     [HttpGet("{id}")]
@@ -32,7 +34,7 @@ public class ReviewsController(ISender mediator) : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<ReviewDto>> GetById(string id, CancellationToken ct)
     {
-        var review = await mediator.Send(new GetReviewByIdQuery(id), ct);
+        var review = await metrics.MeasureAsync("get_by_id", () => mediator.Send(new GetReviewByIdQuery(id), ct));
         Response.Headers.ETag = $"\"{review.Version}\"";
         return Ok(review);
     }
@@ -44,7 +46,8 @@ public class ReviewsController(ISender mediator) : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<ActionResult<string>> Create(CreateReviewCommand command, CancellationToken ct)
     {
-        var id = await mediator.Send(command, ct);
+        var id = await metrics.MeasureAsync("create", () => mediator.Send(command, ct));
+        metrics.ReviewCreated(command.Rating);
         return CreatedAtAction(nameof(GetById), new { id }, id);
     }
 
@@ -71,8 +74,9 @@ public class ReviewsController(ISender mediator) : ControllerBase
             expectedVersion = version;
         }
 
-        var updated = await mediator.Send(
-            new UpdateReviewCommand(id, request.Rating, request.Text, expectedVersion), ct);
+        var updated = await metrics.MeasureAsync("update", () => mediator.Send(
+            new UpdateReviewCommand(id, request.Rating, request.Text, expectedVersion), ct));
+        metrics.ReviewUpdated();
 
         Response.Headers.ETag = $"\"{updated.Version}\"";
         return Ok(updated);
@@ -84,7 +88,8 @@ public class ReviewsController(ISender mediator) : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(string id, CancellationToken ct)
     {
-        await mediator.Send(new DeleteReviewCommand(id), ct);
+        await metrics.MeasureAsync("delete", () => mediator.Send(new DeleteReviewCommand(id), ct));
+        metrics.ReviewDeleted();
         return NoContent();
     }
 
@@ -96,7 +101,9 @@ public class ReviewsController(ISender mediator) : ControllerBase
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status409Conflict)]
     public async Task<IActionResult> AddComment(string id, AddCommentRequest request, CancellationToken ct)
     {
-        await mediator.Send(new AddCommentCommand(id, request.AuthorId, request.AuthorName, request.Text), ct);
+        await metrics.MeasureAsync("add_comment", () => mediator.Send(
+            new AddCommentCommand(id, request.AuthorId, request.AuthorName, request.Text), ct));
+        metrics.CommentAdded();
         return NoContent();
     }
 }

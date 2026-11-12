@@ -11,6 +11,15 @@ public sealed class TwoLevelCache(
     ICacheMetrics metrics,
     ILogger<TwoLevelCache> logger) : ITwoLevelCache
 {
+    // Graceful degradation: короткий таймаут операцій L2 і пауза L2 після збою,
+    // щоб зупинений Redis не змушував кожен запит чекати таймаут
+    private static readonly TimeSpan L2Timeout = TimeSpan.FromSeconds(1);
+    private const long L2PauseMs = 15_000;
+    private long _l2PausedUntil;   // Environment.TickCount64
+
+    private bool L2Paused => Environment.TickCount64 < Interlocked.Read(ref _l2PausedUntil);
+    private void PauseL2() => Interlocked.Exchange(ref _l2PausedUntil, Environment.TickCount64 + L2PauseMs);
+
     public async Task<T?> GetOrCreateAsync<T>(string key, CachePolicy policy,
         Func<CancellationToken, Task<T?>> factory, CancellationToken ct = default) where T : class
     {
@@ -23,28 +32,33 @@ public sealed class TwoLevelCache(
         }
         metrics.Miss("L1");
 
-        // ---- L2: Redis ----
-        try
+        // ---- L2: Redis (пропускаємо, поки він «лежить») ----
+        if (!L2Paused)
         {
-            var bytes = await distributed.GetAsync(key, ct);
-            if (bytes is not null)
+            try
             {
-                var shared = JsonSerializer.Deserialize<T>(bytes);
-                if (shared is not null)
+                var bytes = await distributed.GetAsync(key, ct).WaitAsync(L2Timeout, ct);
+                if (bytes is not null)
                 {
-                    metrics.Hit("L2");
-                    logger.LogDebug("Cache hit {Key}, level {Level}, {Size} bytes", key, "L2", bytes.Length);
-                    SetLocal(key, shared, policy);          // L1 заповнюється на зворотному шляху
-                    return shared;
+                    var shared = JsonSerializer.Deserialize<T>(bytes);
+                    if (shared is not null)
+                    {
+                        metrics.Hit("L2");
+                        logger.LogDebug("Cache hit {Key}, level {Level}, {Size} bytes", key, "L2", bytes.Length);
+                        SetLocal(key, shared, policy);          // L1 заповнюється на зворотному шляху
+                        return shared;
+                    }
                 }
+                metrics.Miss("L2");
+                logger.LogDebug("Cache miss {Key}, level {Level}", key, "L2");
             }
-            metrics.Miss("L2");
-            logger.LogDebug("Cache miss {Key}, level {Level}", key, "L2");
-        }
-        catch (Exception ex) when (!ct.IsCancellationRequested)
-        {
-            // Redis недоступний: працюємо без L2, сервіс не падає
-            logger.LogWarning(ex, "Redis (L2) unavailable for {Key}, falling back to database", key);
+            catch (Exception ex) when (!ct.IsCancellationRequested)
+            {
+                PauseL2();
+                logger.LogWarning(ex,
+                    "Redis (L2) unavailable for {Key}, L2 paused for {Pause} s, falling back to database",
+                    key, L2PauseMs / 1000);
+            }
         }
 
         // ---- джерело: база даних ----
@@ -59,12 +73,15 @@ public sealed class TwoLevelCache(
     public async Task RemoveAsync(string key, string reason, CancellationToken ct = default)
     {
         memory.Remove(key);
+
+        // L2 чистимо завжди (щоб не лишити застарілий запис), але з коротким таймаутом
         try
         {
-            await distributed.RemoveAsync(key, ct);
+            await distributed.RemoveAsync(key, ct).WaitAsync(L2Timeout, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            PauseL2();
             logger.LogWarning(ex, "Redis (L2) invalidation failed for {Key}", key);
         }
 
@@ -82,13 +99,17 @@ public sealed class TwoLevelCache(
 
     private async Task SetSharedAsync<T>(string key, T value, CachePolicy policy, CancellationToken ct)
     {
+        if (L2Paused) return;
+
         try
         {
             await distributed.SetAsync(key, JsonSerializer.SerializeToUtf8Bytes(value),
-                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = policy.L2Absolute }, ct);
+                new DistributedCacheEntryOptions { AbsoluteExpirationRelativeToNow = policy.L2Absolute }, ct)
+                .WaitAsync(L2Timeout, ct);
         }
         catch (Exception ex) when (!ct.IsCancellationRequested)
         {
+            PauseL2();
             logger.LogWarning(ex, "Redis (L2) write failed for {Key}", key);
         }
     }
