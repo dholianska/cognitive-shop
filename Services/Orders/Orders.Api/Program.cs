@@ -9,6 +9,7 @@ using Orders.Api.Metrics;
 using Orders.Bll.Caching;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Orders.Api.HealthChecks;
+using Orders.Api.IntegrationEvents;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -40,6 +41,13 @@ builder.Services.AddGrpc(o =>
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
+
+// обробники подій Каталогу (scope повідомлення) і споживач
+builder.Services.AddScoped<ProductCreatedHandler>();
+builder.Services.AddScoped<ProductPriceChangedHandler>();
+builder.Services.AddScoped<ProductRenamedHandler>();
+builder.Services.AddScoped<ProductDeletedHandler>();
+builder.Services.AddHostedService<CatalogEventsConsumer>();
 
 builder.Services.AddControllers();
 
