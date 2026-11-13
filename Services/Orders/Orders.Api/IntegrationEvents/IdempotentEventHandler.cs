@@ -55,13 +55,20 @@ public abstract class IdempotentEventHandler<TEvent>(IUnitOfWork uow, ILogger lo
         }
         catch (Exception ex) when (ex is ValidationException or BusinessConflictException)
         {
-            // порушення бізнес-правил від повтору не зникне: постійний збій
+            Logger.LogWarning(ex,
+                "Handling {EventType} {EventId} failed for product {ProductId}: business rules violated",
+                typeof(TEvent).Name, e.EventId, ProductIdOf(e));
+
             await Uow.RollbackAsync(ct);
             throw new PermanentFailureException(
                 $"{typeof(TEvent).Name} {e.EventId} violates business rules: {ex.Message}", ex);
         }
-        catch
+        catch (Exception ex)
         {
+            Logger.LogWarning(ex,
+                "Handling {EventType} {EventId} failed for product {ProductId}: transient failure",
+                typeof(TEvent).Name, e.EventId, ProductIdOf(e));
+
             await Uow.RollbackAsync(ct);
             throw;   // тимчасовий збій (БД недоступна, таймаут): consumer вирішить, що робити
         }

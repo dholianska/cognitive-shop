@@ -10,6 +10,7 @@ using Orders.Bll.Caching;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Orders.Api.HealthChecks;
 using Orders.Api.IntegrationEvents;
+using Platform.EventBus;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -48,6 +49,7 @@ builder.Services.AddScoped<ProductPriceChangedHandler>();
 builder.Services.AddScoped<ProductRenamedHandler>();
 builder.Services.AddScoped<ProductDeletedHandler>();
 builder.Services.AddHostedService<CatalogEventsConsumer>();
+builder.Services.AddDlqDepthMonitor(EventTopology.OrdersCatalogSync);
 
 builder.Services.AddControllers();
 

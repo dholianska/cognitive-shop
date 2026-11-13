@@ -13,8 +13,19 @@ public sealed class CatalogEventsConsumer(
         if (eventType != nameof(ProductRenamedEvent))
             throw new PermanentFailureException($"Unknown event type '{eventType}'");
 
-        await using var scope = scopes.CreateAsyncScope();
-        await scope.ServiceProvider.GetRequiredService<ProductRenamedHandler>()
-            .HandleAsync(Deserialize<ProductRenamedEvent>(body), ct);
+        var e = Deserialize<ProductRenamedEvent>(body);
+
+        try
+        {
+            await using var scope = scopes.CreateAsyncScope();
+            await scope.ServiceProvider.GetRequiredService<ProductRenamedHandler>().HandleAsync(e, ct);
+        }
+        catch (Exception ex) when (!ct.IsCancellationRequested)
+        {
+            // бізнес-контекст збою: ідентифікатор сутності поруч з EventId і CorrelationId зі scope споживача
+            Logger.LogWarning(ex, "Handling {EventType} {EventId} failed for product {ProductId}",
+                eventType, e.EventId, e.ProductId);
+            throw;
+        }
     }
 }
