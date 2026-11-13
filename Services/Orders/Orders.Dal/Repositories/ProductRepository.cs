@@ -3,6 +3,7 @@ using Microsoft.Data.SqlClient;
 using Orders.Dal.Abstractions;
 using Orders.Domain.Exceptions;
 using Orders.Domain.Models;
+using System.Data;
 
 namespace Orders.Dal.Repositories;
 
@@ -60,4 +61,60 @@ public sealed class ProductRepository : BaseDapperRepository<Product>, IProductR
         if (rows == 0)
             throw new NotFoundException($"Product {productId} not found");
     }
+
+    public Task<bool> UpsertSnapshotAsync(long productId, string name, decimal price, int initialStock,
+    DateTime occurredAt, CancellationToken ct = default)
+    => GuardValueAsync(async () =>
+    {
+        await EnsureOpenAsync(ct);
+
+        // 1) UPDATE лише якщо подія новіша за вже застосовану; 2) якщо товару ще немає, INSERT.
+        // Stock чіпаємо тільки при створенні: залишок у Замовленнях веде сам сервіс Замовлень
+        const string sql = @"
+            DECLARE @applied INT = 0;
+
+            UPDATE dbo.Products
+            SET Name = @Name, Price = @Price, IsDeleted = 0, SnapshotAt = @At, UpdatedAt = SYSUTCDATETIME()
+            WHERE Id = @Id AND (SnapshotAt IS NULL OR SnapshotAt < @At);
+            SET @applied = @@ROWCOUNT;
+
+            IF @applied = 0 AND NOT EXISTS (SELECT 1 FROM dbo.Products WHERE Id = @Id)
+            BEGIN
+                INSERT dbo.Products (Id, Name, Price, Stock, SnapshotAt)
+                VALUES (@Id, @Name, @Price, @Stock, @At);
+                SET @applied = 1;
+            END
+
+            SELECT @applied;";
+
+        var parameters = new DynamicParameters();
+        parameters.Add("Id", productId);
+        parameters.Add("Name", name);
+        parameters.Add("Price", price);
+        parameters.Add("Stock", initialStock);
+        parameters.Add("At", occurredAt, DbType.DateTime2);
+
+        var applied = await Connection.ExecuteScalarAsync<int>(
+            new CommandDefinition(sql, parameters, Transaction, cancellationToken: ct));
+        return applied > 0;
+    });
+
+    public Task<bool> MarkDeletedAsync(long productId, DateTime occurredAt, CancellationToken ct = default)
+        => GuardValueAsync(async () =>
+        {
+            await EnsureOpenAsync(ct);
+
+            const string sql = @"
+            UPDATE dbo.Products
+            SET IsDeleted = 1, SnapshotAt = @At, UpdatedAt = SYSUTCDATETIME()
+            WHERE Id = @Id AND (SnapshotAt IS NULL OR SnapshotAt < @At)";
+
+            var parameters = new DynamicParameters();
+            parameters.Add("Id", productId);
+            parameters.Add("At", occurredAt, DbType.DateTime2);
+
+            var rows = await Connection.ExecuteAsync(
+                new CommandDefinition(sql, parameters, Transaction, cancellationToken: ct));
+            return rows > 0;
+        });
 }

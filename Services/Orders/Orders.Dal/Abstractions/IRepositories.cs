@@ -42,4 +42,21 @@ public interface IProductRepository : IGenericRepository<Product>
     Task DecreaseStockAsync(long productId, int quantity, CancellationToken ct = default);
     /// <summary>Повертає залишок (скасування підтвердженого замовлення).</summary>
     Task IncreaseStockAsync(long productId, int quantity, CancellationToken ct = default);
+
+    /// <summary>
+    /// Оновлює локальну копію товару подією Каталогу (upsert). Подію, старішу за вже застосовану
+    /// (OccurredAt ≤ SnapshotAt), ігнорує. Повертає true, якщо зміну застосовано.
+    /// </summary>
+    Task<bool> UpsertSnapshotAsync(long productId, string name, decimal price, int initialStock,
+        DateTime occurredAt, CancellationToken ct = default);
+
+    /// <summary>М'яке видалення копії товару подією Каталогу (з тим самим захистом від застарілих подій).</summary>
+    Task<bool> MarkDeletedAsync(long productId, DateTime occurredAt, CancellationToken ct = default);
+}
+
+/// <summary>Таблиця оброблених подій для ідемпотентності consumer-ів (Лаб. 08).</summary>
+public interface IProcessedEventRepository
+{
+    /// <summary>true: EventId додано вперше; false: подію вже оброблено.</summary>
+    Task<bool> TryAddAsync(Guid eventId, CancellationToken ct = default);
 }
