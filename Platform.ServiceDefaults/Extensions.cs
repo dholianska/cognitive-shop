@@ -87,6 +87,7 @@ public static class Extensions
             {
                 t.AddSource(builder.Environment.ApplicationName)                    // власні spans (3.3)
                  .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")     // MongoDB
+                 .AddSource("Platform.Messaging")
                  .AddAspNetCoreInstrumentation(o => o.Filter = ctx =>
                      !ctx.Request.Path.StartsWithSegments(HealthEndpointPath) &&
                      !ctx.Request.Path.StartsWithSegments(AlivenessEndpointPath))
