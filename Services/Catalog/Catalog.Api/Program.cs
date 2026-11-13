@@ -14,6 +14,8 @@ using Platform.ServiceDefaults;
 using Catalog.Api.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Platform.EventBus;
+using Catalog.Api.IntegrationEvents;
+using Catalog.Bll.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -89,6 +91,8 @@ builder.Services.AddHealthChecks()
 builder.Services.AddGrpcHealthChecks(o =>
     o.Services.MapService("", r => r.Tags.Contains("ready") && !r.Tags.Contains("cache")));
 
+builder.Services.AddEventPublisher();
+builder.Services.AddSingleton<IProductEventsPublisher, ProductEventsPublisher>();
 
 var app = builder.Build();
 app.UseCorrelationId();

@@ -8,10 +8,11 @@ using Catalog.Dal.Specifications;
 using Catalog.Domain.Queries;
 using System.Diagnostics;
 using Catalog.Bll.Caching;
+using Catalog.Bll.Events;
 
 namespace Catalog.Bll.Services;
 
-public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCache cache, ILogger<ProductService> logger)
+public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCache cache, IProductEventsPublisher events, ILogger<ProductService> logger)
     : IProductService
 {
     private static readonly ActivitySource Source = new("Catalog.Api");
@@ -70,6 +71,7 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCac
         await uow.SaveChangesAsync(ct);   // один виклик наприкінці операції
 
         logger.LogInformation("Product {ProductId} created with SKU {Sku}", product.Id, product.Sku);
+        await events.ProductCreatedAsync(product.Id, product.Name, product.Sku, product.Price, product.AvailableStock, ct);
         return mapper.Map<ProductDto>(product);
     }
 
@@ -87,6 +89,26 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCac
 
         logger.LogInformation("Product {ProductId} price changed from {OldPrice} to {NewPrice}",
             id, oldPrice, newPrice);
+
+        // лише після успішного збереження: подія для Замовлень
+        await events.PriceChangedAsync(id, product.Name, oldPrice, newPrice, ct);
+    }
+
+    public async Task RenameAsync(int id, string name, CancellationToken ct = default)
+    {
+        var product = await GetTrackedAsync(id, ct);
+        var oldName = product.Name;
+
+        product.Rename(name);                       // інваріант у сутності (порожня назва, довжина)
+        if (product.Name == oldName) return;        // назва не змінилась: ні запису, ні події
+
+        await uow.SaveChangesAsync(ct);             // 1) зміни збережено
+        await InvalidateAsync(id, "ProductRenamed", ct);
+
+        logger.LogInformation("Product {ProductId} renamed from {OldName} to {NewName}", id, oldName, product.Name);
+
+        // 2) лише після успішного збереження: подія для Замовлень і Відгуків
+        await events.RenamedAsync(id, oldName, product.Name, product.Price, ct);
     }
 
     public async Task AddStockAsync(int id, int quantity, CancellationToken ct = default)
@@ -122,11 +144,13 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCac
     public async Task DeleteAsync(int id, CancellationToken ct = default)
     {
         var product = await GetTrackedAsync(id, ct);
+        var name = product.Name;
         uow.Products.Delete(product);           // деталі, зображення й зв'язки з категоріями видалить каскад
         await uow.SaveChangesAsync(ct);
         await InvalidateAsync(id, "ProductDeleted", ct);
 
         logger.LogInformation("Product {ProductId} deleted", id);
+        await events.DeletedAsync(id, name, ct);
     }
 
     private async Task<Product> GetTrackedAsync(int id, CancellationToken ct)
