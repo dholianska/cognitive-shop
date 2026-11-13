@@ -8,6 +8,7 @@ using Reviews.Application.Caching;
 using Reviews.WebApi.Metrics;
 using Reviews.WebApi.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Reviews.WebApi.IntegrationEvents;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
@@ -35,6 +36,10 @@ builder.Services.AddGrpc(o =>
     o.EnableDetailedErrors = builder.Environment.IsDevelopment();
     o.Interceptors.Add<GrpcLoggingInterceptor>();
 });
+
+
+builder.Services.AddScoped<ProductRenamedHandler>();
+builder.Services.AddHostedService<CatalogEventsConsumer>();
 
 // неявний [Required] для non-nullable полів вимкнено: усі правила валідації виконує pipeline MediatR
 builder.Services.AddControllers(o => o.SuppressImplicitRequiredAttributeForNonNullableReferenceTypes = true);
