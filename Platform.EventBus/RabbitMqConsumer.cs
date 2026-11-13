@@ -4,6 +4,7 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using RabbitMQ.Client;
 using RabbitMQ.Client.Events;
+using System.Diagnostics;
 
 namespace Platform.EventBus;
 
@@ -86,6 +87,9 @@ public abstract class RabbitMqConsumer(IConnection connection, ConsumerQueue que
             ["Queue"] = queue.Queue
         });
 
+        // відновлюємо контекст із заголовків: Consumer-span стає нащадком publish-span з Каталогу
+        using var activity = TracePropagation.StartConsumerActivity(ea, queue.Queue, correlationId);
+
         logger.LogInformation("Received {EventType} {EventId} from {Queue}", eventType, eventId, queue.Queue);
 
         try
@@ -101,6 +105,7 @@ public abstract class RabbitMqConsumer(IConnection connection, ConsumerQueue que
         }
         catch (Exception ex) when (ex is JsonException or PermanentFailureException)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             // постійний збій: повтор не допоможе, повідомлення йде в DLQ
             logger.LogError(ex, "Permanent failure for {EventType} {EventId}, sending to DLQ {Dlq}",
                 eventType, eventId, queue.DeadLetterQueue);
@@ -109,6 +114,7 @@ public abstract class RabbitMqConsumer(IConnection connection, ConsumerQueue que
         }
         catch (Exception ex)
         {
+            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
             await RetryOrDeadLetterAsync(ea, ex);
             return;
         }
