@@ -82,7 +82,7 @@ public static class Extensions
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
-                .AddMeter("*.Cache", "Polly", "Orders.Api", "Catalog.Api", "Reviews.WebApi"))
+                .AddMeter("*.Cache", "Polly", "Orders.Api", "Catalog.Api", "Reviews.WebApi", "Platform.Messaging"))
             .WithTracing(t =>
             {
                 t.AddSource(builder.Environment.ApplicationName)                    // власні spans (3.3)
