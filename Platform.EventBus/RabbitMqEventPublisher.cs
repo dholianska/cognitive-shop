@@ -8,14 +8,20 @@ namespace Platform.EventBus;
 public sealed class RabbitMqEventPublisher(IConnection connection, ILogger<RabbitMqEventPublisher> logger)
     : IEventPublisher
 {
-    public async Task PublishAsync<T>(T @event, string exchange, string routingKey, CancellationToken ct = default)
+    public Task PublishAsync<T>(T @event, string exchange, string routingKey, CancellationToken ct = default)
         where T : IntegrationEvent
+        => PublishRawAsync(new OutboundMessage(
+            @event.EventId, typeof(T).Name, exchange, routingKey,
+            JsonSerializer.SerializeToUtf8Bytes(@event, JsonDefaults.Options),
+            @event.OccurredAt, @event.SchemaVersion, @event.CorrelationId, TraceParent: null), ct);
+
+    public async Task PublishRawAsync(OutboundMessage message, CancellationToken ct = default)
     {
-        // span публікації: нащадок поточного HTTP-запиту, його контекст іде в заголовки повідомлення
+        // span публікації: нащадок поточного запиту або (для outbox) відновленого traceparent
         using var activity = TracePropagation.StartPublishActivity(
-            exchange, routingKey, @event.EventId.ToString(), typeof(T).Name);
-        if (!string.IsNullOrEmpty(@event.CorrelationId))
-            activity?.SetTag(CorrelationContext.TagName, @event.CorrelationId);
+            message.Exchange, message.RoutingKey, message.EventId.ToString(), message.EventType, message.TraceParent);
+        if (!string.IsNullOrEmpty(message.CorrelationId))
+            activity?.SetTag(CorrelationContext.TagName, message.CorrelationId);
 
         try
         {
@@ -24,30 +30,28 @@ public sealed class RabbitMqEventPublisher(IConnection connection, ILogger<Rabbi
                 new CreateChannelOptions(publisherConfirmationsEnabled: true, publisherConfirmationTrackingEnabled: true),
                 ct);
 
-            var headers = new Dictionary<string, object?> { ["x-schema-version"] = @event.SchemaVersion };
-            if (!string.IsNullOrEmpty(@event.CorrelationId))
-                headers["x-correlation-id"] = @event.CorrelationId;
+            var headers = new Dictionary<string, object?> { ["x-schema-version"] = message.SchemaVersion };
+            if (!string.IsNullOrEmpty(message.CorrelationId))
+                headers["x-correlation-id"] = message.CorrelationId;
 
             var props = new BasicProperties
             {
                 Persistent = true,                                   // переживає перезапуск брокера
                 ContentType = "application/json",
-                MessageId = @event.EventId.ToString(),               // для ідемпотентності та діагностики
-                Type = typeof(T).Name,                               // тип події для маршрутизації в consumer
-                Timestamp = new AmqpTimestamp(new DateTimeOffset(@event.OccurredAt).ToUnixTimeSeconds()),
+                MessageId = message.EventId.ToString(),              // для ідемпотентності та діагностики
+                Type = message.EventType,                            // тип події для маршрутизації в consumer
+                Timestamp = new AmqpTimestamp(new DateTimeOffset(message.OccurredAt).ToUnixTimeSeconds()),
                 Headers = headers
             };
 
             TracePropagation.Inject(activity, props);                // traceparent / tracestate / baggage
 
-            var body = JsonSerializer.SerializeToUtf8Bytes(@event, JsonDefaults.Options);
-
-            await channel.BasicPublishAsync(exchange, routingKey, mandatory: false, basicProperties: props,
-                body: body, cancellationToken: ct);
+            await channel.BasicPublishAsync(message.Exchange, message.RoutingKey, mandatory: false,
+                basicProperties: props, body: message.Body, cancellationToken: ct);
 
             logger.LogInformation(
                 "Published {EventType} {EventId} to {Exchange}/{RoutingKey}, correlation {CorrelationId}",
-                typeof(T).Name, @event.EventId, exchange, routingKey, @event.CorrelationId);
+                message.EventType, message.EventId, message.Exchange, message.RoutingKey, message.CorrelationId);
         }
         catch (Exception ex)
         {

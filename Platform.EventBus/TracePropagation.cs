@@ -15,10 +15,21 @@ public static class TracePropagation
     public static readonly ActivitySource Source = new(SourceName);
     private static readonly TextMapPropagator Propagator = Propagators.DefaultTextMapPropagator;
 
-    /// <summary>Producer-span публікації. Його контекст ітиме в заголовки повідомлення.</summary>
-    public static Activity? StartPublishActivity(string exchange, string routingKey, string messageId, string eventType)
+    /// <summary>
+    /// Producer-span публікації. Для повідомлень з outbox контекст відновлюється зі збереженого traceparent,
+    /// тож публікація лишається в тому ж trace, що й HTTP-запит, який створив подію.
+    /// </summary>
+    public static Activity? StartPublishActivity(
+        string exchange, string routingKey, string messageId, string eventType, string? parentTraceParent = null)
     {
-        var activity = Source.StartActivity($"{exchange} publish", ActivityKind.Producer);
+        var name = $"{exchange} publish";
+
+        Activity? activity;
+        if (parentTraceParent is not null && ActivityContext.TryParse(parentTraceParent, null, out var parent))
+            activity = Source.StartActivity(name, ActivityKind.Producer, parent);
+        else
+            activity = Source.StartActivity(name, ActivityKind.Producer);
+
         if (activity is null) return null;
 
         activity.SetTag("messaging.system", "rabbitmq");

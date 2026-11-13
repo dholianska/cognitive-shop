@@ -92,6 +92,7 @@ builder.Services.AddGrpcHealthChecks(o =>
     o.Services.MapService("", r => r.Tags.Contains("ready") && !r.Tags.Contains("cache")));
 
 builder.Services.AddEventPublisher();
+builder.Services.AddHostedService<OutboxDispatcher>();
 builder.Services.AddScoped<IProductEventsOutbox, ProductEventsOutbox>();   // scoped: пише в той самий DbContext, що й UnitOfWork
 
 var app = builder.Build();
