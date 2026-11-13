@@ -13,10 +13,12 @@ using Catalog.Api.GrpcServices;
 using Platform.ServiceDefaults;
 using Catalog.Api.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Platform.EventBus;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 builder.AddRabbitMQClient("messaging", s => s.DisableTracing = true);   // IConnection (singleton) + health check; трасування брокера робимо вручну (Частина 4)
+builder.Services.AddEventBusTopology();
 builder.AddRedisDistributedCache("redis", s => s.DisableHealthChecks = true);   // власну перевірку (Degraded) реєструємо нижче
 
 // Рядок підключення: appsettings.json, перекритий user-secrets або змінною оточення
