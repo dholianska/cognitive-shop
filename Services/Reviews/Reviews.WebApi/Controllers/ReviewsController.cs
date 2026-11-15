@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using MediatR;
 using Microsoft.AspNetCore.Mvc;
 using Reviews.Application.Commands.AddComment;
@@ -14,6 +15,7 @@ namespace Reviews.WebApi.Controllers;
 
 /// <summary>Тонкий адаптер: усі операції виконує MediatR (ISender), тут немає ні бізнес-правил, ні MongoDB.</summary>
 [ApiController]
+[Authorize]
 [Route("api/reviews")]
 public class ReviewsController(ISender mediator, ReviewMetrics metrics) : ControllerBase
 {

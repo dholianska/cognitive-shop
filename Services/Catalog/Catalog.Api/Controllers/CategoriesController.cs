@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Catalog.Bll.Dtos;
 using Catalog.Bll.Services;
 using Microsoft.AspNetCore.Mvc;
@@ -5,6 +6,7 @@ using Microsoft.AspNetCore.Mvc;
 namespace Catalog.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/categories")]
 public class CategoriesController(ICategoryService service) : ControllerBase
 {

@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Catalog.Bll.Dtos;
 using Catalog.Bll.Services;
 using Catalog.Domain.Exceptions;
@@ -9,6 +10,7 @@ using System.Diagnostics;
 namespace Catalog.Api.GrpcServices;
 
 /// <summary>gRPC-адаптер над IProductService. Кеш (L1/L2) працює і для REST, і для gRPC, бо це той самий BLL.</summary>
+[Authorize]
 public class CatalogGrpcService(IProductService products, ILogger<CatalogGrpcService> logger)
     : CatalogService.CatalogServiceBase
 {

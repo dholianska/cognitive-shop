@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Orders.Bll.Dtos;
 using Orders.Bll.Services;
 
@@ -6,6 +7,7 @@ namespace Orders.Api.Controllers;
 
 /// <summary>Лише читання: власник товарів сервіс Каталогу, тут локальна копія довідника.</summary>
 [ApiController]
+[Authorize]
 [Route("api/products")]
 public class ProductsController(IProductService products) : ControllerBase
 {

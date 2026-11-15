@@ -1,10 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 using Orders.Bll.Dtos;
 using Orders.Bll.Services;
 
 namespace Orders.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/customers")]
 public class CustomersController(ICustomerService customers) : ControllerBase
 {

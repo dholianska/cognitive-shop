@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using FluentValidation;
 using Grpc.Core;
 using MediatR;
@@ -11,6 +12,7 @@ using System.Diagnostics;
 namespace Reviews.WebApi.GrpcServices;
 
 /// <summary>gRPC-адаптер над MediatR-запитами Application.</summary>
+[Authorize]
 public class ReviewsGrpcService(ISender mediator) : ReviewsService.ReviewsServiceBase
 {
     private const int MaxProducts = 100;

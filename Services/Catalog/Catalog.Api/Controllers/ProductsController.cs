@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel.DataAnnotations;
 using Catalog.Bll.Dtos;
 using Catalog.Bll.Services;
@@ -9,6 +10,7 @@ using Catalog.Api.Metrics;
 namespace Catalog.Api.Controllers;
 
 [ApiController]
+[Authorize]
 [Route("api/products")]
 public class ProductsController(IProductService service, CatalogMetrics metrics) : ControllerBase
 {

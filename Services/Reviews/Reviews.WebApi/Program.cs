@@ -10,9 +10,16 @@ using Reviews.WebApi.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Reviews.WebApi.IntegrationEvents;
 using Platform.EventBus;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
+
+// Лаб. 09, Ч.1: кожен сервіс валідує JWT сам (той самий issuer, audience і ключ), без звернення до Auth Service
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(o => o.TokenValidationParameters = AuthSchemes.OwnJwtParameters(builder.Configuration));
+builder.Services.AddAuthorization();
+
 builder.AddRabbitMQClient("messaging", s => s.DisableTracing = true);   // IConnection (singleton) + health check; трасування брокера робимо вручну (Частина 4)
 builder.AddRedisDistributedCache("redis", s => s.DisableHealthChecks = true);   // власну перевірку (Degraded) реєструємо нижче
 
@@ -91,6 +98,10 @@ if (app.Environment.IsDevelopment())
     app.UseSwagger();
     app.UseSwaggerUI();
 }
+
+
+app.UseAuthentication();
+app.UseAuthorization();
 
 app.MapControllers();
 app.MapGrpcService<ReviewsGrpcService>();
