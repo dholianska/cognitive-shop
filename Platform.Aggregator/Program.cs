@@ -3,6 +3,7 @@ using Platform.Aggregator.Clients;
 using Platform.Aggregator.Metrics;
 using Platform.Aggregator.Services;
 using Platform.Aggregator.HealthChecks;
+using Platform.ServiceDefaults;
 
 var builder = WebApplication.CreateBuilder(args);
 
