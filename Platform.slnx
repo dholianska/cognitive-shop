@@ -5,6 +5,9 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/Services/" />
+  <Folder Name="/Services/Auth/">
+    <Project Path="Services/Auth/Auth.Api/Auth.Api.csproj" />
+  </Folder>
   <Folder Name="/Services/Catalog/">
     <Project Path="Services/Catalog/Catalog.Api/Catalog.Api.csproj" />
     <Project Path="Services/Catalog/Catalog.Bll/Catalog.Bll.csproj" />
