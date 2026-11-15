@@ -1,6 +1,7 @@
 var builder = DistributedApplication.CreateBuilder(args);
 
 var sqlPassword = builder.AddParameter("sql-password", secret: true);
+var jwtSecret = builder.AddParameter("jwt-secret", secret: true);   // Лаб. 09: ключ підпису власного JWT
 
 var sql = builder.AddSqlServer("sql", sqlPassword, port: 14330)
     .WithDataVolume();
@@ -44,6 +45,7 @@ var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
 // Лаб. 09, Ч.1: Auth Service (ASP.NET Identity + JWT)
 var auth = builder.AddProject<Projects.Auth_Api>("auth-api")
     .WithReference(identityDb).WaitFor(identityDb)
+    .WithOwnJwt(jwtSecret)
     .WithHttpHealthCheck("/health/ready");
 
 var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
