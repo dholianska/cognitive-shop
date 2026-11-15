@@ -28,18 +28,21 @@ var orders = builder.AddProject<Projects.Orders_Api>("orders-api")
     .WithReference(ordersDb).WaitFor(ordersDb)
     .WithReference(redis).WaitFor(redis)
     .WithReference(rabbit).WaitFor(rabbit)
+    .WithOwnJwt(jwtSecret)
     .WithHttpHealthCheck("/health/ready");
 
 var catalog = builder.AddProject<Projects.Catalog_Api>("catalog-api")
     .WithReference(catalogDb).WaitFor(catalogDb)
     .WithReference(redis).WaitFor(redis)
     .WithReference(rabbit).WaitFor(rabbit)
+    .WithOwnJwt(jwtSecret)
     .WithHttpHealthCheck("/health/ready");
 
 var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
     .WithReference(reviewsDb).WaitFor(reviewsDb)
     .WithReference(redis).WaitFor(redis)
     .WithReference(rabbit).WaitFor(rabbit)
+    .WithOwnJwt(jwtSecret)
     .WithHttpHealthCheck("/health/ready");
 
 // Ырс. 09, з.1: Auth Service (ASP.NET Identity + JWT)
@@ -52,13 +55,16 @@ var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
     .WithReference(orders).WithReference(catalog).WithReference(reviews)
     .WithReference(redis)
     .WaitFor(orders).WaitFor(catalog).WaitFor(reviews).WaitFor(redis)
+    .WithOwnJwt(jwtSecret)
     .WithHttpHealthCheck("/health/ready");
 
 builder.AddProject<Projects.Platform_ApiGateway>("gateway")
     .WithHttpEndpoint(port: 5000, name: "public")
     .WithReference(orders).WithReference(catalog).WithReference(reviews)
     .WithReference(aggregator)
+    .WithReference(auth).WaitFor(auth)
     .WaitFor(aggregator)
+    .WithOwnJwt(jwtSecret)
     .WithHttpHealthCheck("/health/ready");
 
 builder.Build().Run();
