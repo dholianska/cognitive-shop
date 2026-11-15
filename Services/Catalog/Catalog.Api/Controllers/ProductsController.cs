@@ -78,6 +78,17 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
+    [HttpPut("{id:int}/name")]
+    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Rename(int id, RenameProductDto input, CancellationToken ct)
+    {
+        await metrics.MeasureAsync("rename", () => service.RenameAsync(id, input.Name, ct));
+        metrics.ProductUpdated("name");
+        return NoContent();
+    }
+
     [HttpPost("{id:int}/stock/add")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]

@@ -137,3 +137,25 @@ IF NOT EXISTS (SELECT 1 FROM sys.indexes
                WHERE name = N'IX_OrderItems_ProductId' AND object_id = OBJECT_ID(N'dbo.OrderItems'))
     CREATE INDEX IX_OrderItems_ProductId ON dbo.OrderItems (ProductId);
 GO
+
+-- ============================================================================
+-- Лаб. 08: репліка довідника Products подіями Каталогу та ідемпотентність
+-- ============================================================================
+USE OrdersDb;
+GO
+
+-- час останньої застосованої події Каталогу: застарілу подію, що прийшла пізніше, ігноруємо
+IF COL_LENGTH('dbo.Products', 'SnapshotAt') IS NULL
+    ALTER TABLE dbo.Products ADD SnapshotAt DATETIME2 NULL;
+GO
+
+-- оброблені події: PRIMARY KEY на EventId гарантує, що подія застосується лише раз
+IF OBJECT_ID('dbo.ProcessedEvents', 'U') IS NULL
+    CREATE TABLE dbo.ProcessedEvents
+    (
+        EventId     UNIQUEIDENTIFIER NOT NULL
+            CONSTRAINT PK_ProcessedEvents PRIMARY KEY,
+        ProcessedAt DATETIME2 NOT NULL
+            CONSTRAINT DF_ProcessedEvents_ProcessedAt DEFAULT SYSUTCDATETIME()
+    );
+GO

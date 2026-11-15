@@ -10,4 +10,8 @@ public interface IUnitOfWork
     IProductCategoryRepository ProductCategories { get; }
 
     Task<int> SaveChangesAsync(CancellationToken ct = default);
+
+    /// <summary>явна транзакц≥€ дл€ операц≥й ≥з к≥лькома SaveChanges (створенн€ товару + под≥€).</summary>
+    Task BeginTransactionAsync(CancellationToken ct = default);
+    Task CommitTransactionAsync(CancellationToken ct = default);
 }

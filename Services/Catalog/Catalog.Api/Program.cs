@@ -13,9 +13,14 @@ using Catalog.Api.GrpcServices;
 using Platform.ServiceDefaults;
 using Catalog.Api.HealthChecks;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Platform.EventBus;
+using Catalog.Api.IntegrationEvents;
+using Catalog.Bll.Events;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
+builder.AddRabbitMQClient("messaging", s => s.DisableTracing = true);   // IConnection (singleton) + health check; трасування брокера робимо вручну (Частина 4)
+builder.Services.AddEventBusTopology();
 builder.AddRedisDistributedCache("redis", s => s.DisableHealthChecks = true);   // власну перевірку (Degraded) реєструємо нижче
 
 // Рядок підключення: appsettings.json, перекритий user-secrets або змінною оточення
@@ -86,6 +91,9 @@ builder.Services.AddHealthChecks()
 builder.Services.AddGrpcHealthChecks(o =>
     o.Services.MapService("", r => r.Tags.Contains("ready") && !r.Tags.Contains("cache")));
 
+builder.Services.AddEventPublisher();
+builder.Services.AddHostedService<OutboxDispatcher>();
+builder.Services.AddScoped<IProductEventsOutbox, ProductEventsOutbox>();   // scoped: пише в той самий DbContext, що й UnitOfWork
 
 var app = builder.Build();
 app.UseCorrelationId();

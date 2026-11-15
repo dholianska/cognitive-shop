@@ -600,3 +600,83 @@ gRPC-сервіси відповідають на `grpc.health.v1.Health/Check` 
 | `*.operations.in_flight` | одиниці | постійно висока (операції накопичуються) |
 
 Типові фільтри: у Structured logs `CorrelationId = <значення>` для наскрізного пошуку; категорія `Resilience` / `Polly` для подій resilience; рівень `Warning`/`Error`. У Traces повторні спроби видно як кілька spans одного виклику. У Resources колір ресурсу відповідає статусу health check: зелений Healthy, жовтий Degraded, червоний Unhealthy. Aspire Dashboard це інструмент розробки; у production використовують Grafana, Prometheus, Azure Monitor / Application Insights.
+
+
+
+---
+
+# Лаб. 08: Подієва архітектура з RabbitMQ
+
+Каталог публікує події про товар, а Замовлення й Відгуки асинхронно оновлюють свої копії даних (політика дублювання з Лаб. 01). Це eventual consistency: копія оновлюється за кілька секунд, а джерелом істини лишається Каталог.
+
+## Запуск
+
+RabbitMQ запускається з AppHost автоматично (контейнер `messaging` із постійним volume). Пароль брокера, як і `sql-password`, задається секретом AppHost (одноразово):
+
+```bash
+dotnet user-secrets set "Parameters:rabbit-password" "<ваш пароль>" --project Platform.AppHost
+```
+
+Management UI: **http://localhost:15672** (логін `guest`, пароль з секрету). У Лаб. 08 для БД Замовлень потрібен додатковий скрипт: фрагмент «Лаб. 08» наприкінці `db/p1/schema.sql` (колонка `Products.SnapshotAt` і таблиця `ProcessedEvents`) виконується один раз на існуючій `OrdersDb`; у Каталозі нова таблиця (`OutboxMessages`) створюється міграцією EF автоматично при старті.
+
+## Топологія
+
+Оголошується в коді під час старту (`Platform.EventBus/EventTopology.cs`), повторне оголошення безпечне.
+
+| Об'єкт | Тип | Призначення |
+|---|---|---|
+| `catalog-events` | topic exchange, durable | події Каталогу; routing keys `product.created`, `product.price_changed`, `product.renamed`, `product.deleted` |
+| `orders.catalog-sync` | durable queue, binding `product.*` | Замовлення: усі події товару → локальна копія `Products` |
+| `reviews.catalog-sync` | durable queue, binding `product.renamed` | Відгуки: перейменування → `productName` у відгуках |
+| `catalog-events.dlx` | direct exchange | dead letter exchange; routing key = назва основної черги |
+| `orders.catalog-sync.dlq`, `reviews.catalog-sync.dlq` | durable queues | повідомлення, які не вдалося обробити (ручний розбір) |
+
+DLX має тип `direct` із `x-dead-letter-routing-key` = назва черги, тож кожна DLQ отримує лише повідомлення своєї черги (з `fanout` повідомлення з однієї черги потрапляли б у DLQ усіх сервісів).
+
+## Події
+
+Незмінні `record`-и з `EventId`, `OccurredAt`, `CorrelationId`, `SchemaVersion`; самодостатні (споживач не звертається до Каталогу). Формат: JSON camelCase (`System.Text.Json`), `MessageId` = `EventId`, `Type` = назва події, заголовки `x-correlation-id`, `x-schema-version`, `traceparent`; повідомлення persistent.
+
+| Подія | Routing key | Поля | Споживачі |
+|---|---|---|---|
+| `ProductCreatedEvent` | `product.created` | productId, name, sku, price, availableStock | Замовлення |
+| `ProductPriceChangedEvent` | `product.price_changed` | productId, productName, oldPrice, newPrice | Замовлення |
+| `ProductRenamedEvent` | `product.renamed` | productId, oldName, newName, price | Замовлення, Відгуки |
+| `ProductDeletedEvent` | `product.deleted` | productId, productName | Замовлення |
+
+Реплікація: Замовлення оновлюють назву й ціну в локальній таблиці `Products` (залишок і ціни в оформлених позиціях `OrderItems.UnitPrice` не змінюються: це знімок на момент покупки); Відгуки оновлюють `productName` у всіх відгуках про товар і чистять кеш відгуків.
+
+## Публікація (Transactional Outbox)
+
+Каталог записує подію в таблицю `OutboxMessages` **в одній транзакції** зі зміною товару, а `OutboxDispatcher` публікує її після commit (`IEventPublisher`, persistent JSON, publisher confirms) і повторює спроби, поки брокер не прийме. Якщо транзакція БД не вдалася, подія не з'являється; якщо недоступний брокер, подія не втрачається. Доставка «щонайменше один раз» (дублікати можливі), тому споживачі ідемпотентні.
+
+## Споживання, ідемпотентність, помилки
+
+- `RabbitMqConsumer` (`Platform.EventBus`): `BackgroundService`, `BasicQos` (prefetch 10), `AsyncEventingBasicConsumer`, `autoAck: false`, коректна зупинка. Успіх → `Ack`.
+- **Ідемпотентність.** Замовлення: `EventId` пишеться в `dbo.ProcessedEvents` (PRIMARY KEY) у тій самій транзакції, що й зміна `Products`; дублікат пропускається. Відгуки (MongoDB без replica set, транзакцій нема): колекція `processedEvents` (`_id` = EventId), `UpdateMany` ідемпотентний, подія позначається обробленою останнім кроком.
+- **Out-of-order.** `Products.SnapshotAt` (Замовлення) і колекція `productSnapshots` (Відгуки) зберігають час останньої застосованої події; застарілу ігнорують.
+- **Повтори тимчасових збоїв.** Заголовок `x-retry-count`: повідомлення публікується заново (напряму в ту саму чергу) зі збільшеним лічильником, оригінал підтверджується; паузи 1/2/4 с; максимум 3 повтори, далі `Nack` без requeue → DLX → DLQ.
+- **Постійні збої** (некоректний JSON, невідомий тип, порушення бізнес-правил) одразу йдуть у DLQ. Повідомлення в DLQ автоматично не відновлюються.
+- **Логи** збоїв структуровані: `EventId`, `EventType`, `CorrelationId`, `Queue`, ідентифікатор товару.
+
+## Трасування й метрики
+
+W3C `traceparent` передається в заголовках повідомлення; у consumer створюється Consumer-span як нащадок publish-span (`Platform.Messaging`), тож у Dashboard один trace: HTTP → публікація → обробка → SQL/MongoDB. Метрики: `messaging.consumer.messages` (тег `result`: handled / retried / dead_lettered), `messaging.dlq.depth` (глибина DLQ).
+
+## Сценарії перевірки
+
+| Сценарій | Очікування |
+|---|---|
+| `PUT /api/products/1/price` | за кілька секунд нова ціна в `dbo.Products` (Замовлення); `OrderItems.UnitPrice` без змін |
+| `PUT /api/products/1/name` | нова назва в `dbo.Products` і в `productName` усіх відгуків про товар |
+| та сама подія двічі (однаковий `eventId`) | друга обробка пропускається (`Duplicate … skipped`) |
+| зупинити `orders-api`, змінити ціни, запустити | усі події обробляються після старту |
+| некоректний JSON через Management UI | повідомлення в `orders.catalog-sync.dlq` |
+| зупинити `messaging`, змінити ціну | запит успішний, рядок у `OutboxMessages` з `ProcessedAt IS NULL`; після запуску брокера подія доставлена |
+
+## Таблиця дублювання (доповнення)
+
+| Що дублюється | Де | Чому |
+|---|---|---|
+| контракти подій Каталогу (`ProductCreatedEvent` тощо) | `Catalog.Api`, `Orders.Api`, `Reviews.WebApi` (`IntegrationEvents/`) | сервіси незалежні, контракт це JSON, а не спільна збірка |
+| локальна копія товару | `dbo.Products` (Замовлення), `productName` у відгуках (Відгуки) | політика дублювання з Лаб. 01, оновлюється подіями |

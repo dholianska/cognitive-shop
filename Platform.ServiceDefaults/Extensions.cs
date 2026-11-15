@@ -82,11 +82,12 @@ public static class Extensions
                 .AddAspNetCoreInstrumentation()
                 .AddHttpClientInstrumentation()
                 .AddRuntimeInstrumentation()
-                .AddMeter("*.Cache", "Polly", "Orders.Api", "Catalog.Api", "Reviews.WebApi"))
+                .AddMeter("*.Cache", "Polly", "Orders.Api", "Catalog.Api", "Reviews.WebApi", "Platform.Messaging"))
             .WithTracing(t =>
             {
                 t.AddSource(builder.Environment.ApplicationName)                    // власні spans (3.3)
                  .AddSource("MongoDB.Driver.Core.Extensions.DiagnosticSources")     // MongoDB
+                 .AddSource("Platform.Messaging")
                  .AddAspNetCoreInstrumentation(o => o.Filter = ctx =>
                      !ctx.Request.Path.StartsWithSegments(HealthEndpointPath) &&
                      !ctx.Request.Path.StartsWithSegments(AlivenessEndpointPath))

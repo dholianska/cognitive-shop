@@ -1,17 +1,19 @@
 using AutoMapper;
+using Catalog.Bll.Caching;
 using Catalog.Bll.Dtos;
+using Catalog.Bll.Events;
 using Catalog.Dal.Abstractions;
+using Catalog.Dal.Specifications;
 using Catalog.Domain.Entities;
 using Catalog.Domain.Exceptions;
-using Microsoft.Extensions.Logging;
-using Catalog.Dal.Specifications;
 using Catalog.Domain.Queries;
+using Microsoft.Extensions.Logging;
 using System.Diagnostics;
-using Catalog.Bll.Caching;
 
 namespace Catalog.Bll.Services;
 
-public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCache cache, ILogger<ProductService> logger)
+public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCache cache,
+    IProductEventsOutbox events, ILogger<ProductService> logger)
     : IProductService
 {
     private static readonly ActivitySource Source = new("Catalog.Api");
@@ -66,8 +68,15 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCac
         if (!string.IsNullOrWhiteSpace(input.Description))
             product.SetDetail(input.Description, input.Manufacturer);
 
+        // Id товару видає база, тому подія створюється після першого збереження.
+        // Явна транзакція: товар і подія в outbox зберігаються разом або не зберігаються взагалі
+        await uow.BeginTransactionAsync(ct);
         await uow.Products.AddAsync(product, ct);
-        await uow.SaveChangesAsync(ct);   // один виклик наприкінці операції
+        await uow.SaveChangesAsync(ct);
+        await events.EnqueueProductCreatedAsync(product.Id, product.Name, product.Sku, product.Price,
+            product.AvailableStock, ct);
+        await uow.SaveChangesAsync(ct);
+        await uow.CommitTransactionAsync(ct);
 
         logger.LogInformation("Product {ProductId} created with SKU {Sku}", product.Id, product.Sku);
         return mapper.Map<ProductDto>(product);
@@ -82,11 +91,27 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCac
         var oldPrice = product.Price;
 
         product.ChangePrice(newPrice);         // інваріант у сутності
-        await uow.SaveChangesAsync(ct);         // контекст сам помітив зміну: Update() не потрібен
+        await events.EnqueuePriceChangedAsync(id, product.Name, oldPrice, newPrice, ct);
+        await uow.SaveChangesAsync(ct);         // зміна ціни і подія в outbox зберігаються атомарно
         await InvalidateAsync(id, "PriceChanged", ct);
 
         logger.LogInformation("Product {ProductId} price changed from {OldPrice} to {NewPrice}",
             id, oldPrice, newPrice);
+    }
+
+    public async Task RenameAsync(int id, string name, CancellationToken ct = default)
+    {
+        var product = await GetTrackedAsync(id, ct);
+        var oldName = product.Name;
+
+        product.Rename(name);                       // інваріант у сутності (порожня назва, довжина)
+        if (product.Name == oldName) return;        // назва не змінилась: ні запису, ні події
+
+        await events.EnqueueRenamedAsync(id, oldName, product.Name, product.Price, ct);
+        await uow.SaveChangesAsync(ct);             // нова назва і подія в outbox зберігаються атомарно
+        await InvalidateAsync(id, "ProductRenamed", ct);
+
+        logger.LogInformation("Product {ProductId} renamed from {OldName} to {NewName}", id, oldName, product.Name);
     }
 
     public async Task AddStockAsync(int id, int quantity, CancellationToken ct = default)
@@ -122,8 +147,11 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCac
     public async Task DeleteAsync(int id, CancellationToken ct = default)
     {
         var product = await GetTrackedAsync(id, ct);
+        var name = product.Name;
+
         uow.Products.Delete(product);           // деталі, зображення й зв'язки з категоріями видалить каскад
-        await uow.SaveChangesAsync(ct);
+        await events.EnqueueDeletedAsync(id, name, ct);
+        await uow.SaveChangesAsync(ct);         // видалення і подія в outbox зберігаються атомарно
         await InvalidateAsync(id, "ProductDeleted", ct);
 
         logger.LogInformation("Product {ProductId} deleted", id);
@@ -134,5 +162,5 @@ public sealed class ProductService(IUnitOfWork uow, IMapper mapper, ITwoLevelCac
            ?? throw new EntityNotFoundException($"Product {id} not found");
 
     private Task InvalidateAsync(int id, string reason, CancellationToken ct)
-    => cache.RemoveAsync(CacheKeys.Product(id), reason, ct);
+        => cache.RemoveAsync(CacheKeys.Product(id), reason, ct);
 }

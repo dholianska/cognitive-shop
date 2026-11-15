@@ -39,3 +39,9 @@ public class StockQuantityDto
     [Range(1, 100000)]
     public int Quantity { get; set; }
 }
+
+public class RenameProductDto
+{
+    [Required, StringLength(200, MinimumLength = 1)]
+    public string Name { get; set; } = "";
+}
