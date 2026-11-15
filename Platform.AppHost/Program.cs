@@ -7,6 +7,7 @@ var sql = builder.AddSqlServer("sql", sqlPassword, port: 14330)
 
 var ordersDb = sql.AddDatabase("OrdersDb");    // Лаб. 02
 var catalogDb = sql.AddDatabase("CatalogDb");   // Лаб. 03
+var identityDb = sql.AddDatabase("IdentityDb");  // Лаб. 09, Ч.1: окрема база Auth Service
 
 var mongo = builder.AddMongoDB("mongo")
     .WithDataVolume();
@@ -38,6 +39,11 @@ var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
     .WithReference(reviewsDb).WaitFor(reviewsDb)
     .WithReference(redis).WaitFor(redis)
     .WithReference(rabbit).WaitFor(rabbit)
+    .WithHttpHealthCheck("/health/ready");
+
+// Лаб. 09, Ч.1: Auth Service (ASP.NET Identity + JWT)
+var auth = builder.AddProject<Projects.Auth_Api>("auth-api")
+    .WithReference(identityDb).WaitFor(identityDb)
     .WithHttpHealthCheck("/health/ready");
 
 var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
