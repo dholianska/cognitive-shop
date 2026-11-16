@@ -38,6 +38,11 @@ public class KeycloakStack : Stack
         }, opts);
 
         RealmUrl = Output.Format($"{keycloakUrl}/realms/{realm.RealmName}");
+
+        // 3.3: realm-ролі та resource servers зі scopes і permission policies
+        var roles = ResourceServers.CreateRoles(realm, opts);
+        ResourceServers.CreateAll(realm, roles, opts);
+
         AdminConsoleUrl = Output.Create($"{keycloakUrl}/admin/master/console/#/{RealmName}");
     }
 }
