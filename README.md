@@ -680,3 +680,60 @@ W3C `traceparent` передається в заголовках повідом�
 |---|---|---|
 | контракти подій Каталогу (`ProductCreatedEvent` тощо) | `Catalog.Api`, `Orders.Api`, `Reviews.WebApi` (`IntegrationEvents/`) | сервіси незалежні, контракт це JSON, а не спільна збірка |
 | локальна копія товару | `dbo.Products` (Замовлення), `productName` у відгуках (Відгуки) | політика дублювання з Лаб. 01, оновлюється подіями |
+
+
+# Лаб. 09: Автентифікація й авторизація
+
+Платформу захищено трьома підходами, які працюють одночасно. Токен приймається кожним сервісом незалежно, а схему перевірки обирає політика-схема за полем `iss`.
+
+| Підхід | Де живе | Що видає |
+|---|---|---|
+| ASP.NET Identity + JWT | `Services/Auth/Auth.Api` (БД `IdentityDb`) | access (15 хв) і refresh (7 днів, rotation, HttpOnly cookie) |
+| Duende IdentityServer (OAuth 2.0) | `Platform.IdentityServer`, `http://localhost:5100` (окремий SQL Server, БД `IdentityServerDb`) | Authorization Code + PKCE (Postman, Swagger), Client Credentials (Aggregator) |
+| Keycloak + Pulumi | контейнер `keycloak` (Aspire), `infra/keycloak` | RPT з `authorization.permissions` на кожен resource server |
+
+Єдина точка входу: Gateway (`http://localhost:5000`) валідує токен до проксіювання й додає заголовок `X-User-Id`. Сервіси перевіряють токен і права локально.
+
+## Запуск
+
+1. Ключ підпису власного JWT (мінімум 32 символи):
+   `dotnet user-secrets set "Parameters:jwt-secret" "<ключ>" --project Platform.AppHost`
+2. Запусти `Platform.AppHost`. Міграції Auth Service та IdentityServer застосовуються автоматично на старті.
+3. Keycloak: `cd infra/keycloak`, `pulumi login --local`, `pulumi up`. Для скриптової перевірки: `pulumi config set temporaryPasswords false`.
+4. Перевірка матриці: `.\docs\auth\Test-PermissionMatrix.ps1`. Колекція Postman: `docs/postman/`.
+
+## Тестові облікові записи
+
+| Де | Логін | Пароль | Ролі |
+|---|---|---|---|
+| Auth Service | `admin` | `Admin123!` | User, Admin |
+| IdentityServer | `alice`, `bob` | `Pass123$` | |
+| Keycloak | `alice`, `john.manager`, `bob`, `guest` | `Pass123$` | admin, manager, user, guest |
+
+Паролі лише для розробки.
+
+## Permissions (таблиці методички для наших маршрутів)
+
+| Endpoint | Permission | admin | manager | user | guest |
+|---|---|---|---|---|---|
+| GET /api/orders | orders:read | ✓ | ✓ | ✓ | ✗ |
+| POST /api/orders | orders:create | ✓ | ✗ | ✓ | ✗ |
+| PUT /api/orders/{id}/status | orders:update | ✓ | ✓ | ✗ | ✗ |
+| DELETE /api/orders/{id} | orders:delete | ✓ | ✗ | ✗ | ✗ |
+| POST /api/orders/{id}/confirm (approve) | orders:approve | ✓ | ✓ | ✗ | ✗ |
+| GET /api/products | products:read | ✓ | ✓ | ✓ | ✓ |
+| POST /api/products | products:create | ✓ | ✗ | ✗ | ✗ |
+| PUT /api/products/{id}/… | products:update | ✓ | ✓ | ✗ | ✗ |
+| DELETE /api/products/{id} | products:delete | ✓ | ✗ | ✗ | ✗ |
+| POST /api/products/{id}/publish | products:publish | ✓ | ✓ | ✗ | ✗ |
+| GET /api/payments, POST …/process, …/refund | payments:read / process / refund | ✓ | ✗ | ✗ | ✗ |
+
+Фактичні коди відповідей: `docs/auth/permission-matrix-results.txt`. Декодовані токени: `docs/auth/decoded-tokens.md`.
+
+## Рішення та відхилення від методички
+
+- IdentityServer слухає порт 5100, бо 5000 зайнятий Gateway. Версія Duende 7.4.x, бо 8.x вимагає .NET 10.
+- Токени Keycloak з `authorization.permissions` це RPT за grant `uma-ticket` з `audience` = resource server, тому токен видається окремо на кожен сервіс.
+- Одна політика `[RequirePermission]` обслуговує всі три типи токенів: `authorization.permissions` (Keycloak), scope `orders.read` ↔ `orders:read` (IdentityServer), ролі (власний JWT: Admin усе, User базові права).
+- `POST /orders/{id}/approve` з методички реалізовано як `POST /api/orders/{id}/confirm`; `POST /products/{id}/publish` це заглушка.
+- Aggregator викликає сервіси з токеном Client Credentials від IdentityServer (клієнт `aggregator_service`).
