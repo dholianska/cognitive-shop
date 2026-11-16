@@ -71,7 +71,7 @@ var identityServerDb = builder.AddSqlServer("identityserver-sql", sqlPassword, p
 var identityServer = builder.AddProject<Projects.Platform_IdentityServer>("identityserver")
     .WithReference(identityServerDb).WaitFor(identityServerDb)
     .WithHttpEndpoint(port: 5100, name: "public")   // ף לועמהטקצ³ 5000, אכו ימדמ גזו חאיםÿג Gateway
-    .WithHttpHealthCheck("/health/ready");
+    .WithHttpHealthCheck("/health/ready", endpointName: "public");
 
 var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
     .WithReference(orders).WithReference(catalog).WithReference(reviews)

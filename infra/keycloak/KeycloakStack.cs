@@ -8,10 +8,10 @@ public class KeycloakStack : Stack
 {
     public const string RealmName = "DevRealmDrivers";
 
-    [Output] public Output<string> RealmUrl { get; set; } = null!;
-    [Output] public Output<string> AdminConsoleUrl { get; set; } = null!;
-    [Output] public Output<ImmutableArray<string>> ClientIds { get; set; } = null!;
-    [Output] public Output<ImmutableDictionary<string, string>> ClientSecrets { get; set; } = null!;
+    [Output("RealmUrl")] public Output<string> RealmUrl { get; set; } = null!;
+    [Output("AdminConsoleUrl")] public Output<string> AdminConsoleUrl { get; set; } = null!;
+    [Output("ClientIds")] public Output<ImmutableArray<string>> ClientIds { get; set; } = null!;
+    [Output("ClientSecrets")] public Output<ImmutableDictionary<string, string>> ClientSecrets { get; set; } = null!;
 
     public KeycloakStack()
     {

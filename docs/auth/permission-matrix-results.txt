@@ -1,0 +1,19 @@
+
+Endpoint                          admin manager user guest
+--------                          ----- ------- ---- -----
+GET /api/orders?customerId=1      0     0       0    403* 
+POST /api/orders                  0     0       0    403* 
+PUT /api/orders/999999/status     0     0       0    403* 
+DELETE /api/orders/999999         0     0       0    403* 
+POST /api/orders/999999/confirm   0     0       0    403* 
+GET /api/products                 0     0       0    0    
+POST /api/products                0     0       0    0    
+PUT /api/products/999999/price    0     0       0    0    
+DELETE /api/products/999999       0     0       0    0    
+POST /api/products/999999/publish 0     0       0    0    
+GET /api/payments                 0     403*    403* 403* 
+POST /api/payments/process        0     403*    403* 403* 
+POST /api/payments/refund         0     403*    403* 403* 
+
+
+
