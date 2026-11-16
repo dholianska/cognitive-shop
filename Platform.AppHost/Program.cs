@@ -64,6 +64,12 @@ var identityServer = builder.AddProject<Projects.Platform_IdentityServer>("ident
     .WithHttpEndpoint(port: 5100, name: "public")   // у методичці 5000, але його вже зайняв Gateway
     .WithHttpHealthCheck("/health/ready");
 
+// Лаб. 09, Ч.3 (траєкторія Б): Keycloak через Aspire; WithDataVolume зберігає realm і користувачів між перезапусками
+var keycloakAdmin = builder.AddParameter("keycloak-admin-username", "admin");
+var keycloakAdminPassword = builder.AddParameter("keycloak-admin-password", "admin123", secret: true);   // лише для розробки
+var keycloak = builder.AddKeycloak("keycloak", 8080, keycloakAdmin, keycloakAdminPassword)
+    .WithDataVolume();
+
 var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
     .WithReference(orders).WithReference(catalog).WithReference(reviews)
     .WithReference(redis)
