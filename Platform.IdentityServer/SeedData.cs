@@ -36,8 +36,14 @@ public static class SeedData
                 db.ApiResources.Add(r.ToEntity());
 
         foreach (var c in Config.Clients)
-            if (!await db.Clients.AnyAsync(x => x.ClientId == c.ClientId))
-                db.Clients.Add(c.ToEntity());
+        {
+            var existing = await db.Clients.FirstOrDefaultAsync(x => x.ClientId == c.ClientId);
+            if (existing is not null) db.Clients.Remove(existing);
+        }
+        await db.SaveChangesAsync();
+
+        foreach (var c in Config.Clients)
+            db.Clients.Add(c.ToEntity());
 
         await db.SaveChangesAsync();
     }

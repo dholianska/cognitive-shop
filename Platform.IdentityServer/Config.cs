@@ -19,7 +19,9 @@ public static class Config
         new("products.write", "Create and change products"),
         new("reviews.read", "Read reviews"),
         new("reviews.write", "Create and change reviews"),
-        new("aggregator.read", "Read aggregated orders")
+        new("aggregator.read", "Read aggregated orders"),
+        new("payments.read", "Read payments"),
+        new("payments.write", "Process and refund payments")
     ];
 
     // ApiResource = мікросервіс; його ім'я потрапляє в claim aud, а сервіс перевіряє Audience
@@ -28,7 +30,8 @@ public static class Config
         new("orders_api", "Orders API") { Scopes = { "orders.read", "orders.write" } },
         new("products_api", "Catalog API") { Scopes = { "products.read", "products.write" } },
         new("reviews_api", "Reviews API") { Scopes = { "reviews.read", "reviews.write" } },
-        new("aggregator_api", "Aggregator API") { Scopes = { "aggregator.read" } }
+        new("aggregator_api", "Aggregator API") { Scopes = { "aggregator.read" } },
+        new("payments_api", "Payments API") { Scopes = { "payments.read", "payments.write" } }
     ];
 
     public static IEnumerable<Client> Clients =>
@@ -44,7 +47,8 @@ public static class Config
             {
                 "openid", "profile",
                 "orders.read", "orders.write", "products.read", "products.write",
-                "reviews.read", "reviews.write", "aggregator.read"
+                "reviews.read", "reviews.write", "aggregator.read",
+                "payments.read", "payments.write"
             },
             AllowOfflineAccess = true
         },

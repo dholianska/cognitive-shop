@@ -13,32 +13,43 @@ using Orders.Api.IntegrationEvents;
 using Platform.EventBus;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.OpenApi.Models;
+using Microsoft.AspNetCore.Authorization;
+using Platform.ServiceDefaults.Authorization;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
-// Лаб. 09, Ч.2: приймаємо і власний JWT (Ч.1), і токени IdentityServer (Ч.2); схему обирає політика-схема за issuer
+// Лаб. 09, Ч.3: власний JWT, IdentityServer і Keycloak в одному сервісі; схему обирає політика-схема за issuer
 builder.Services.AddAuthentication(o =>
 {
     o.DefaultScheme = AuthSchemes.Multi;
     o.DefaultChallengeScheme = AuthSchemes.Multi;
 })
-.AddPolicyScheme(AuthSchemes.Multi, "Own JWT or IdentityServer",
-    o => o.ForwardDefaultSelector = ctx => AuthSchemes.SelectByIssuer(ctx, builder.Configuration))
+.AddPolicyScheme(AuthSchemes.Multi, "Own JWT, IdentityServer or Keycloak",
+    o => o.ForwardDefaultSelector = ctx => AuthSchemes.SelectByIssuer(ctx, builder.Configuration, keycloakEnabled: true))
 .AddJwtBearer(AuthSchemes.OwnJwt,
     o => o.TokenValidationParameters = AuthSchemes.OwnJwtParameters(builder.Configuration))
 .AddJwtBearer(AuthSchemes.IdentityServer, o =>
 {
-    o.Authority = builder.Configuration["IdentityServer:Authority"];   // ключі підпису з /.well-known/openid-configuration
-    o.Audience = "orders_api";                                         // ApiResource цього сервісу
-    o.RequireHttpsMetadata = false;                                    // розробка: IdentityServer на HTTP
+    o.Authority = builder.Configuration["IdentityServer:Authority"];
+    o.Audience = "orders_api";
+    o.RequireHttpsMetadata = false;
+})
+.AddKeycloakJwtBearer("keycloak", "DevRealmDrivers", AuthSchemes.Keycloak, options =>
+{
+    options.Audience = "orders-api";                    // resource server у Keycloak
+    if (builder.Environment.IsDevelopment())
+        options.RequireHttpsMetadata = false;           // Keycloak у розробці: HTTP
 });
 
-// Scope-based політики: дозвіл дає scope з токена IdentityServer або токен власного Auth Service
-var ownIssuer = builder.Configuration["Jwt:Issuer"];
-builder.Services.AddAuthorizationBuilder()
-    .AddPolicy("orders.read", p => p.RequireAssertion(c => c.User.HasScopeOrOwnJwt("orders.read", ownIssuer)))
-    .AddPolicy("orders.write", p => p.RequireAssertion(c => c.User.HasScopeOrOwnJwt("orders.write", ownIssuer)));
+// Permission-based авторизація (таблиця 3.3.1): політика на кожен permission.
+// Handler (Platform.ServiceDefaults/Authorization) читає claim authorization.permissions з токена Keycloak.
+builder.Services.AddSingleton<IAuthorizationHandler, PermissionAuthorizationHandler>();
+builder.Services.AddAuthorization(options =>
+{
+    foreach (var permission in new[] { "orders:read", "orders:create", "orders:update", "orders:delete", "orders:approve" })
+        options.AddPolicy(permission, p => p.Requirements.Add(new PermissionRequirement(permission)));
+});
 
 builder.AddRabbitMQClient("messaging", s => s.DisableTracing = true);   // IConnection (singleton) + health check; трасування брокера робимо вручну (Частина 4)
 builder.AddRedisDistributedCache("redis", s => s.DisableHealthChecks = true);   // власну перевірку (Degraded) реєструємо нижче

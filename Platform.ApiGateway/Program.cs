@@ -16,7 +16,7 @@ builder.Services.AddAuthentication(o =>
     o.DefaultChallengeScheme = AuthSchemes.Multi;
 })
 .AddPolicyScheme(AuthSchemes.Multi, "Own JWT or IdentityServer",
-    o => o.ForwardDefaultSelector = ctx => AuthSchemes.SelectByIssuer(ctx, builder.Configuration))
+    o => o.ForwardDefaultSelector = ctx => AuthSchemes.SelectByIssuer(ctx, builder.Configuration, keycloakEnabled: true))
 .AddJwtBearer(AuthSchemes.OwnJwt,
     o => o.TokenValidationParameters = AuthSchemes.OwnJwtParameters(builder.Configuration))
 .AddJwtBearer(AuthSchemes.IdentityServer, o =>
@@ -24,6 +24,12 @@ builder.Services.AddAuthentication(o =>
     o.Authority = builder.Configuration["IdentityServer:Authority"];
     o.RequireHttpsMetadata = false;
     o.TokenValidationParameters.ValidateAudience = false;   // Gateway не знаЇ аудитор≥й окремих API: њх перев≥р€ють серв≥си
+})
+.AddKeycloakJwtBearer("keycloak", "DevRealmDrivers", AuthSchemes.Keycloak, options =>
+{
+    if (builder.Environment.IsDevelopment())
+        options.RequireHttpsMetadata = false;
+    options.TokenValidationParameters.ValidateAudience = false;   // аудитор≥њ перев≥р€ють сам≥ серв≥си
 });
 
 builder.Services.AddAuthorizationBuilder()

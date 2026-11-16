@@ -20,6 +20,9 @@
     <Project Path="Services/Orders/Orders.Dal/Orders.Dal.csproj" />
     <Project Path="Services/Orders/Orders.Domain/Orders.Domain.csproj" />
   </Folder>
+  <Folder Name="/Services/Payments/">
+    <Project Path="Services/Payments/Payments.Api/Payments.Api.csproj" />
+  </Folder>
   <Folder Name="/Services/Reviews/">
     <Project Path="Services/Reviews/Reviews.Application/Reviews.Application.csproj" />
     <Project Path="Services/Reviews/Reviews.Domain/Reviews.Domain.csproj" />

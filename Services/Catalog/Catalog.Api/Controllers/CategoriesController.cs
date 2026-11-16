@@ -1,3 +1,4 @@
+using Platform.ServiceDefaults.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using Catalog.Bll.Dtos;
 using Catalog.Bll.Services;
@@ -10,14 +11,14 @@ namespace Catalog.Api.Controllers;
 [Route("api/categories")]
 public class CategoriesController(ICategoryService service) : ControllerBase
 {
-    [Authorize(Policy = "products.read")]
+    [RequirePermission("products:read")]
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<CategoryDto>>> GetAll(CancellationToken ct)
         => Ok(await service.GetAllAsync(ct));
 
     /// <summary>Категорія з товарами (Explicit Loading: у лозі видно 2 SQL-запити).</summary>
-    [Authorize(Policy = "products.read")]
+    [RequirePermission("products:read")]
     [HttpGet("{id:int}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -25,7 +26,7 @@ public class CategoriesController(ICategoryService service) : ControllerBase
         => Ok(await service.GetWithProductsAsync(id, ct));
 
     /// <summary>Товари категорії, додані після вказаної дати (M:N + поле AddedAt).</summary>
-    [Authorize(Policy = "products.read")]
+    [RequirePermission("products:read")]
     [HttpGet("recent-products")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]

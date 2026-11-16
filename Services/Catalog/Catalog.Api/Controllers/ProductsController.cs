@@ -1,3 +1,4 @@
+using Platform.ServiceDefaults.Authorization;
 using Microsoft.AspNetCore.Authorization;
 using System.ComponentModel.DataAnnotations;
 using Catalog.Bll.Dtos;
@@ -20,7 +21,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
     /// (items, totalCount, page, pageSize, totalPages, hasNext, hasPrevious)
     /// і дублюються в заголовку X-Total-Count.
     /// </summary>
-    [Authorize(Policy = "products.read")]
+    [RequirePermission("products:read")]
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -37,7 +38,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
     }
 
     /// <summary>Товари з малим залишком (друга специфікація).</summary>
-    [Authorize(Policy = "products.read")]
+    [RequirePermission("products:read")]
     [HttpGet("low-stock")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -45,7 +46,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         [FromQuery, Range(0, 100000)] int threshold = 10, CancellationToken ct = default)
         => Ok(await metrics.MeasureAsync("low_stock", () => service.GetLowStockAsync(threshold, ct)));
 
-    [Authorize(Policy = "products.read")]
+    [RequirePermission("products:read")]
     [HttpGet("{id:int}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -54,7 +55,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
             ? Ok(dto)
             : NotFound();   // не знайдено: 404 (обробник)
 
-    [Authorize(Policy = "products.write")]
+    [RequirePermission("products:create")]
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -73,7 +74,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
     }
 
     // прості правила (Range) перевіряє DataAnnotations ще до виклику дії
-    [Authorize(Policy = "products.write")]
+    [RequirePermission("products:update")]
     [HttpPut("{id:int}/price")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -85,7 +86,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
-    [Authorize(Policy = "products.write")]
+    [RequirePermission("products:update")]
     [HttpPut("{id:int}/name")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -97,7 +98,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
-    [Authorize(Policy = "products.write")]
+    [RequirePermission("products:update")]
     [HttpPost("{id:int}/stock/add")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -109,7 +110,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
-    [Authorize(Policy = "products.write")]
+    [RequirePermission("products:update")]
     [HttpPost("{id:int}/stock/remove")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -122,7 +123,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
-    [Authorize(Policy = "products.write")]
+    [RequirePermission("products:update")]
     [HttpPut("{id:int}/categories/{categoryId:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -134,7 +135,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
-    [Authorize(Policy = "products.write")]
+    [RequirePermission("products:delete")]
     [HttpDelete("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -153,4 +154,9 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
             ? null
             : ValidationProblem(new ValidationProblemDetails(result.ToDictionary()));
     }
+
+    /// <summary>Лаб. 09, Ч.3: заглушка публікації товару для демонстрації permission products:publish.</summary>
+    [RequirePermission("products:publish")]
+    [HttpPost("{id:int}/publish")]
+    public IActionResult Publish(int id) => Accepted(new { id, status = "published (stub)" });
 }

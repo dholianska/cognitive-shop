@@ -1,4 +1,5 @@
-﻿using Microsoft.AspNetCore.Authorization;
+﻿using Platform.ServiceDefaults.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Orders.Bll.Dtos;
 using Orders.Bll.Services;
@@ -10,20 +11,20 @@ namespace Orders.Api.Controllers;
 [Route("api/customers")]
 public class CustomersController(ICustomerService customers) : ControllerBase
 {
-    [Authorize(Policy = "orders.read")]
+    [RequirePermission("orders:read")]
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
     public async Task<ActionResult<IReadOnlyList<CustomerDto>>> GetAll(CancellationToken ct)
         => Ok(await customers.GetAllAsync(ct));
 
-    [Authorize(Policy = "orders.read")]
+    [RequirePermission("orders:read")]
     [HttpGet("{id:long}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<ActionResult<CustomerDto>> GetById(long id, CancellationToken ct)
         => Ok(await customers.GetByIdAsync(id, ct));   // NotFound -> 404 обробником
 
-    [Authorize(Policy = "orders.write")]
+    [RequirePermission("orders:create")]
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -34,7 +35,7 @@ public class CustomersController(ICustomerService customers) : ControllerBase
         return CreatedAtAction(nameof(GetById), new { id = created.Id }, created);   // 201 + Location
     }
 
-    [Authorize(Policy = "orders.write")]
+    [RequirePermission("orders:delete")]
     [HttpDelete("{id:long}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
