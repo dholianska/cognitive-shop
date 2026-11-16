@@ -737,3 +737,36 @@ W3C `traceparent` передається в заголовках повідом�
 - Одна політика `[RequirePermission]` обслуговує всі три типи токенів: `authorization.permissions` (Keycloak), scope `orders.read` ↔ `orders:read` (IdentityServer), ролі (власний JWT: Admin усе, User базові права).
 - `POST /orders/{id}/approve` з методички реалізовано як `POST /api/orders/{id}/confirm`; `POST /products/{id}/publish` це заглушка.
 - Aggregator викликає сервіси з токеном Client Credentials від IdentityServer (клієнт `aggregator_service`).
+
+
+# Лаб. 10: Розгортання в Kubernetes
+
+Для розгортання проєкту в локальному кластері Kubernetes (Docker Desktop) передбачено два способи:
+
+1. **Aspir8** — автоматична генерація Kubernetes-маніфестів на основі конфігурації .NET Aspire. Згенеровані файли розміщуються в `Platform.AppHost/aspirate-output/`.
+2. **Ручне розгортання** — використання підготовлених Kubernetes-маніфестів, розташованих у каталозі `deploy/k8s/`. Цей спосіб дозволяє окремо налаштовувати Deployment, Service, ConfigMap та інші ресурси.
+
+## Розгортання за допомогою Aspir8
+
+Перейдіть до кореневого каталогу проєкту та виконайте команди:
+
+```bash
+# Ініціалізація конфігурації Aspir8
+aspirate init
+
+# Генерація Kubernetes-маніфестів
+aspirate generate
+
+# Застосування маніфестів до Kubernetes-кластера
+aspirate apply
+```
+
+Після генерації маніфести будуть доступні в `Platform.AppHost/aspirate-output/`.
+
+## Ручне розгортання
+
+Інструкції з побудови Docker-образів, створення секретів, застосування маніфестів і перевірки розгортання наведені в окремому файлі:
+
+[Інструкція з ручного розгортання в Kubernetes](deploy/k8s/README.md).
+
+**Примітка щодо секретів:** перед розгортанням необхідно створити Kubernetes Secrets за допомогою команди `kubectl create secret`. Значення секретів (рядки підключення до баз даних і сервісів, ключ підпису JWT тощо) не зберігаються в репозиторії з міркувань безпеки.
