@@ -18,6 +18,11 @@ spec:
         - name: catalog-api
           image: catalog-api:v1
           imagePullPolicy: IfNotPresent   # локальний образ з Docker Desktop
+          envFrom:
+            - configMapRef:
+                name: catalog-config
+            - secretRef:
+                name: catalog-secrets
           ports:
             - containerPort: 8080
           livenessProbe:                  # збій -> перезапуск контейнера

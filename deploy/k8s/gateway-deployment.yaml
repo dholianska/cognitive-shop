@@ -18,6 +18,11 @@ spec:
         - name: gateway
           image: gateway:v1
           imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: gateway-config
+            - secretRef:
+                name: gateway-secrets
           ports:
             - containerPort: 8080
           livenessProbe:
