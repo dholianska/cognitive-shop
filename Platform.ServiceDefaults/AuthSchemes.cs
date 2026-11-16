@@ -12,6 +12,7 @@ public static class AuthSchemes
     public const string Multi = "Multi";                   // політика-схема, сама нічого не валідує
     public const string OwnJwt = "OwnJwt";                 // Ч.1: JWT власного Auth Service
     public const string IdentityServer = "IdentityServer"; // Ч.2: токени Duende IdentityServer
+    public const string Keycloak = "Keycloak";   // Ч.3: токени Keycloak (RPT з authorization.permissions)
 
     public static string SelectByIssuer(HttpContext context, IConfiguration config)
     {
@@ -49,5 +50,28 @@ public static class AuthSchemes
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromSeconds(30)
         };
+    }
+
+    public static string SelectByIssuer(HttpContext context, IConfiguration config, bool keycloakEnabled = false)
+    {
+        var header = context.Request.Headers.Authorization.ToString();
+        if (!header.StartsWith("Bearer ", StringComparison.OrdinalIgnoreCase)) return OwnJwt;
+
+        try
+        {
+            var handler = new JwtSecurityTokenHandler();
+            var token = header["Bearer ".Length..].Trim();
+            if (!handler.CanReadToken(token)) return OwnJwt;
+
+            var issuer = handler.ReadJwtToken(token).Issuer?.TrimEnd('/');
+            var identityServer = config["IdentityServer:Authority"]?.TrimEnd('/');
+            if (identityServer is not null && issuer == identityServer) return IdentityServer;
+            if (keycloakEnabled && issuer is not null && issuer.Contains("/realms/")) return Keycloak;
+            return OwnJwt;
+        }
+        catch (ArgumentException)
+        {
+            return OwnJwt;
+        }
     }
 }
