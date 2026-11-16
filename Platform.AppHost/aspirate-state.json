@@ -1,0 +1,86 @@
+{
+  "projectPath": ".",
+  "inputPath": "aspirate-output",
+  "outputPath": "aspirate-output",
+  "containerRegistry": "localhost:5001",
+  "containerImageTags": [
+    "latest"
+  ],
+  "imagePullPolicy": "IfNotPresent",
+  "containerBuilder": "docker",
+  "kubeContext": "docker-desktop",
+  "outputFormat": "kustomize",
+  "skipFinalKustomizeGeneration": false,
+  "privateRegistryEmail": "aspir8@aka.ms",
+  "includeDashboard": true,
+  "useCustomNamespace": false,
+  "secrets": {
+    "salt": "wFXBoTG8WscEhXsp",
+    "hash": "rpxzFNVtTrzV1ESun69OzsD6jrctggixWLXDoaAKRgY=",
+    "secrets": {
+      "mongo-password": {
+        "value": "wFXBoTG8WscEhXsp6RXBoPK4g2nsddXmLXmVj1ZLGK2Bk/NAX\u002B3eWxhsGyRJ\u002BhuUgZc="
+      },
+      "redis-password": {
+        "value": "wFXBoTG8WscEhXspYJnYXmXvHXEqCNB59\u002BGk3EJ\u002BH4SHkuJDaMffSGVqQitM4TiQwp4="
+      },
+      "sql-password": {
+        "value": "wFXBoTG8WscEhXspB9BEMOfQ4\u002BgDO3zX3yzNkGBzEIyq3tp4b/6dP2Rs"
+      },
+      "jwt-secret": {
+        "value": "wFXBoTG8WscEhXspu6mSjWLmWPnv7SdX1QpmdEZyEpCk08B6a6HcZzouWzlK5VuB0bJbENYLST1NJ/emDDUQLwZ4H6lS6zb0rIRLBJT\u002B1w=="
+      },
+      "rabbit-password": {
+        "value": "wFXBoTG8WscEhXspB6z8PGoeHuzo9JxHmd/SwEBzEIyq3tp4b/6dP2Rs"
+      },
+      "keycloak-admin-username": {
+        "value": "wFXBoTG8WscEhXsp0dGCXob98O5Ut0I81oxW6kR5GJej"
+      },
+      "keycloak-admin-password": {
+        "value": "wFXBoTG8WscEhXspY\u002B29OfFKGrZHXdXQ5FBZfkR5GJejlps/"
+      },
+      "sql": {
+        "MSSQL_SA_PASSWORD": "wFXBoTG8WscEhXspB9BEMOfQ4\u002BgDO3zX3yzNkGBzEIyq3tp4b/6dP2Rs"
+      },
+      "OrdersDb": {},
+      "CatalogDb": {},
+      "IdentityDb": {},
+      "mongo": {},
+      "ReviewsDb": {},
+      "redis": {},
+      "messaging": {},
+      "keycloak": {},
+      "orders-api": {
+        "ConnectionStrings__OrdersDb": "wFXBoTG8WscEhXspIAkTU4ABwho2aNDgFtPxI3Z4B4io1ZR/f\u002BCDPmFtRW0UxgWXyvV8PYUfBW14P6nlSmhRfw4LRvQZoSzvuYteU4migHrR\u002BRK5d2EbWUdioBhzmFXqD1fHlLsRehuDj3vTHRZR2mTVgzrDDB223dmCQHxGk/mGAoQ3",
+        "ConnectionStrings__redis": "wFXBoTG8WscEhXspHuEVT2CNeaTiE47bKNnHiFd4EZe\u002BnZ8/ObWDfzQtBSpA4RLP37ZfA/JZLxlOFarRDTMXbVA8ZvMRjQ==",
+        "ConnectionStrings__messaging": "wFXBoTG8WscEhXspUhaUns1O2EqKE\u002BWkAVx3Z0RwBI73iIZre\u002Bnce287GDhd9A\u002BBzLRHS4hdVhZFO6nlXGBKdVR0Hadc9A=="
+      },
+      "catalog-api": {
+        "ConnectionStrings__CatalogDb": "wFXBoTG8WscEhXspl18jN8b8rVItpRP4EZXJM3Z4B4io1ZR/f\u002BCDPmFtRW0UxgWXyvV8PYUfBW14P6nlSmhRfw4LRvQZoSzvuYteU4migHrR\u002BRK5d2EbWUdioBhzmFXqD1fHlLsRehuDj3vTHRZR2mTVgzrDDB223dmCQHBVg/2YHqcR\u002Bg==",
+        "ConnectionStrings__redis": "wFXBoTG8WscEhXspHuEVT2CNeaTiE47bKNnHiFd4EZe\u002BnZ8/ObWDfzQtBSpA4RLP37ZfA/JZLxlOFarRDTMXbVA8ZvMRjQ==",
+        "ConnectionStrings__messaging": "wFXBoTG8WscEhXspUhaUns1O2EqKE\u002BWkAVx3Z0RwBI73iIZre\u002Bnce287GDhd9A\u002BBzLRHS4hdVhZFO6nlXGBKdVR0Hadc9A=="
+      },
+      "reviews-api": {
+        "ConnectionStrings__ReviewsDb": "wFXBoTG8WscEhXspsfzO6Cs7PD\u002BxUd6yHm\u002B7CkhyG5miw8s2IaPOazg3GGdcxRuh9OFvNekNFQJlbLfvW25OfQoMaPwEqDLz99gbUYiknRPg/Q6vdEE6SQ5mpy9\u002BuU72G13ByK4QKgaf3H\u002BdIBB1y27cjnTpHgTq4vW3PH4ZpNS1XPJgrg==",
+        "ConnectionStrings__redis": "wFXBoTG8WscEhXspHuEVT2CNeaTiE47bKNnHiFd4EZe\u002BnZ8/ObWDfzQtBSpA4RLP37ZfA/JZLxlOFarRDTMXbVA8ZvMRjQ==",
+        "ConnectionStrings__messaging": "wFXBoTG8WscEhXspUhaUns1O2EqKE\u002BWkAVx3Z0RwBI73iIZre\u002Bnce287GDhd9A\u002BBzLRHS4hdVhZFO6nlXGBKdVR0Hadc9A=="
+      },
+      "auth-api": {
+        "ConnectionStrings__IdentityDb": "wFXBoTG8WscEhXspES5VnqFxfjIGNi67tB\u002B4InZ4B4io1ZR/f\u002BCDPmFtRW0UxgWXyvV8PYUfBW14P6nlSmhRfw4LRvQZoSzvuYteU4migHrR\u002BRK5d2EbWUdioBhzmFXqD1fHlLsRehuDj3vTHRZR2mTVgzrDDB223dmCQHpQkvKAGLQs3Ik="
+      },
+      "identityserver-sql": {
+        "MSSQL_SA_PASSWORD": "wFXBoTG8WscEhXspB9BEMOfQ4\u002BgDO3zX3yzNkGBzEIyq3tp4b/6dP2Rs"
+      },
+      "IdentityServerDb": {},
+      "identityserver": {
+        "ConnectionStrings__IdentityServerDb": "wFXBoTG8WscEhXspN\u002Bmv54KRQb8oxuH9x/y/c3Z4B4io1ZRlaunBezwqDy5K4QCXyvhGCNRAVWIbbeutaHRGaRMHbKwYp27MrJlfFtbh1nzA5QK4ZEsNX1B14Gsn2BrXG0vXgZwRNRmUiF2NJgxRyGTXjm7lUB2lxNPeNF1dg/WVHeAW\u002BZ8r87UMhdV/TQU7sryBDBDRLxK5bPA="
+      },
+      "aggregator": {
+        "ConnectionStrings__redis": "wFXBoTG8WscEhXspHuEVT2CNeaTiE47bKNnHiFd4EZe\u002BnZ8/ObWDfzQtBSpA4RLP37ZfA/JZLxlOFarRDTMXbVA8ZvMRjQ=="
+      },
+      "payments-api": {},
+      "gateway": {}
+    }
+  },
+  "processAllComponents": true
+}

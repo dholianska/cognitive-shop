@@ -66,11 +66,12 @@ var auth = builder.AddProject<Projects.Auth_Api>("auth-api")
 // Лаб. 09, Ч.2: IdentityServer з ОКРЕМИМ SQL Server і базою (ізоляція безпеки)
 var identityServerDb = builder.AddSqlServer("identityserver-sql", sqlPassword, port: 14331)
     .WithDataVolume()
+    .WithHttpEndpoint(port: 5100, targetPort: 8080, name: "public")
     .AddDatabase("IdentityServerDb");
 
 var identityServer = builder.AddProject<Projects.Platform_IdentityServer>("identityserver")
     .WithReference(identityServerDb).WaitFor(identityServerDb)
-    .WithHttpEndpoint(port: 5100, name: "public")   // у методичці 5000, але його вже зайняв Gateway
+    .WithHttpEndpoint(port: 5100, targetPort: 8080, name: "public")
     .WithHttpHealthCheck("/health/ready", endpointName: "public");
 
 var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")

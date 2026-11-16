@@ -1,0 +1,532 @@
+{
+  "$schema": "https://json.schemastore.org/aspire-8.0.json",
+  "resources": {
+    "sql-password": {
+      "type": "parameter.v0",
+      "value": "{sql-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "jwt-secret": {
+      "type": "parameter.v0",
+      "value": "{jwt-secret.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "sql": {
+      "type": "container.v0",
+      "connectionString": "Server={sql.bindings.tcp.host},{sql.bindings.tcp.port};User ID=sa;Password={sql-password.value};TrustServerCertificate=true",
+      "image": "mcr.microsoft.com/mssql/server:2022-latest",
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-sql-data",
+          "target": "/var/opt/mssql",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "ACCEPT_EULA": "Y",
+        "MSSQL_SA_PASSWORD": "{sql-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "tcp",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "port": 14330,
+          "targetPort": 1433
+        }
+      }
+    },
+    "OrdersDb": {
+      "type": "value.v0",
+      "connectionString": "{sql.connectionString};Initial Catalog=OrdersDb"
+    },
+    "CatalogDb": {
+      "type": "value.v0",
+      "connectionString": "{sql.connectionString};Initial Catalog=CatalogDb"
+    },
+    "IdentityDb": {
+      "type": "value.v0",
+      "connectionString": "{sql.connectionString};Initial Catalog=IdentityDb"
+    },
+    "mongo": {
+      "type": "container.v0",
+      "connectionString": "mongodb://admin:{mongo-password.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}?authSource=admin\u0026authMechanism=SCRAM-SHA-256",
+      "image": "docker.io/library/mongo:8.0",
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-mongo-data",
+          "target": "/data/db",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "MONGO_INITDB_ROOT_USERNAME": "admin",
+        "MONGO_INITDB_ROOT_PASSWORD": "{mongo-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "tcp",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "targetPort": 27017
+        }
+      }
+    },
+    "ReviewsDb": {
+      "type": "value.v0",
+      "connectionString": "mongodb://admin:{mongo-password.value}@{mongo.bindings.tcp.host}:{mongo.bindings.tcp.port}/ReviewsDb?authSource=admin\u0026authMechanism=SCRAM-SHA-256"
+    },
+    "redis": {
+      "type": "container.v0",
+      "connectionString": "{redis.bindings.tcp.host}:{redis.bindings.tcp.port},password={redis-password.value}",
+      "image": "docker.io/library/redis:8.2",
+      "entrypoint": "/bin/sh",
+      "args": [
+        "-c",
+        "redis-server --requirepass $REDIS_PASSWORD --save 60 1"
+      ],
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-redis-data",
+          "target": "/data",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "REDIS_PASSWORD": "{redis-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "tcp",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "targetPort": 6379
+        }
+      }
+    },
+    "rabbit-password": {
+      "type": "parameter.v0",
+      "value": "{rabbit-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "messaging": {
+      "type": "container.v0",
+      "connectionString": "amqp://guest:{rabbit-password.value}@{messaging.bindings.tcp.host}:{messaging.bindings.tcp.port}",
+      "image": "docker.io/library/rabbitmq:4.1-management",
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-messaging-data",
+          "target": "/var/lib/rabbitmq",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "RABBITMQ_DEFAULT_USER": "guest",
+        "RABBITMQ_DEFAULT_PASS": "{rabbit-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "tcp",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "targetPort": 5672
+        },
+        "management": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 15672
+        }
+      }
+    },
+    "keycloak-admin-username": {
+      "type": "parameter.v0",
+      "value": "{keycloak-admin-username.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "keycloak-admin-password": {
+      "type": "parameter.v0",
+      "value": "{keycloak-admin-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true
+        }
+      }
+    },
+    "keycloak": {
+      "type": "container.v0",
+      "image": "quay.io/keycloak/keycloak:26.3",
+      "args": [
+        "start",
+        "--import-realm"
+      ],
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-keycloak-data",
+          "target": "/opt/keycloak/data",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "KC_BOOTSTRAP_ADMIN_USERNAME": "{keycloak-admin-username.value}",
+        "KC_BOOTSTRAP_ADMIN_PASSWORD": "{keycloak-admin-password.value}",
+        "KC_HEALTH_ENABLED": "true"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 8080
+        },
+        "management": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "targetPort": 9000
+        }
+      }
+    },
+    "orders-api": {
+      "type": "project.v0",
+      "path": "../Services/Orders/Orders.Api/Orders.Api.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{orders-api.bindings.http.targetPort}",
+        "ConnectionStrings__OrdersDb": "{OrdersDb.connectionString}",
+        "ConnectionStrings__redis": "{redis.connectionString}",
+        "ConnectionStrings__messaging": "{messaging.connectionString}",
+        "Jwt__Issuer": "cognitive-shop-auth",
+        "Jwt__Audience": "cognitive-shop",
+        "Jwt__SecretKey": "{jwt-secret.value}",
+        "IdentityServer__Authority": "http://localhost:5100",
+        "services__keycloak__http__0": "{keycloak.bindings.http.url}",
+        "services__keycloak__management__0": "{keycloak.bindings.management.url}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "catalog-api": {
+      "type": "project.v0",
+      "path": "../Services/Catalog/Catalog.Api/Catalog.Api.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{catalog-api.bindings.http.targetPort}",
+        "ConnectionStrings__CatalogDb": "{CatalogDb.connectionString}",
+        "ConnectionStrings__redis": "{redis.connectionString}",
+        "ConnectionStrings__messaging": "{messaging.connectionString}",
+        "Jwt__Issuer": "cognitive-shop-auth",
+        "Jwt__Audience": "cognitive-shop",
+        "Jwt__SecretKey": "{jwt-secret.value}",
+        "IdentityServer__Authority": "http://localhost:5100",
+        "services__keycloak__http__0": "{keycloak.bindings.http.url}",
+        "services__keycloak__management__0": "{keycloak.bindings.management.url}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "reviews-api": {
+      "type": "project.v0",
+      "path": "../Services/Reviews/Reviews.WebApi/Reviews.WebApi.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{reviews-api.bindings.http.targetPort}",
+        "ConnectionStrings__ReviewsDb": "{ReviewsDb.connectionString}",
+        "ConnectionStrings__redis": "{redis.connectionString}",
+        "ConnectionStrings__messaging": "{messaging.connectionString}",
+        "Jwt__Issuer": "cognitive-shop-auth",
+        "Jwt__Audience": "cognitive-shop",
+        "Jwt__SecretKey": "{jwt-secret.value}",
+        "IdentityServer__Authority": "http://localhost:5100"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "auth-api": {
+      "type": "project.v0",
+      "path": "../Services/Auth/Auth.Api/Auth.Api.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{auth-api.bindings.http.targetPort}",
+        "ConnectionStrings__IdentityDb": "{IdentityDb.connectionString}",
+        "Jwt__Issuer": "cognitive-shop-auth",
+        "Jwt__Audience": "cognitive-shop",
+        "Jwt__SecretKey": "{jwt-secret.value}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "identityserver-sql": {
+      "type": "container.v0",
+      "connectionString": "Server={identityserver-sql.bindings.tcp.host},{identityserver-sql.bindings.tcp.port};User ID=sa;Password={sql-password.value};TrustServerCertificate=true",
+      "image": "mcr.microsoft.com/mssql/server:2022-latest",
+      "volumes": [
+        {
+          "name": "platform.apphost-04e9402f01-identityserver-sql-data",
+          "target": "/var/opt/mssql",
+          "readOnly": false
+        }
+      ],
+      "env": {
+        "ACCEPT_EULA": "Y",
+        "MSSQL_SA_PASSWORD": "{sql-password.value}"
+      },
+      "bindings": {
+        "tcp": {
+          "scheme": "tcp",
+          "protocol": "tcp",
+          "transport": "tcp",
+          "port": 14331,
+          "targetPort": 1433
+        },
+        "public": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "port": 5100,
+          "targetPort": 8080
+        }
+      }
+    },
+    "IdentityServerDb": {
+      "type": "value.v0",
+      "connectionString": "{identityserver-sql.connectionString};Initial Catalog=IdentityServerDb"
+    },
+    "identityserver": {
+      "type": "project.v0",
+      "path": "../Platform.IdentityServer/Platform.IdentityServer.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{identityserver.bindings.public.targetPort}",
+        "ConnectionStrings__IdentityServerDb": "{IdentityServerDb.connectionString}"
+      },
+      "bindings": {
+        "public": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "port": 5100,
+          "targetPort": 8080
+        }
+      }
+    },
+    "aggregator": {
+      "type": "project.v0",
+      "path": "../Platform.Aggregator/Platform.Aggregator.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{aggregator.bindings.http.targetPort}",
+        "services__orders-api__http__0": "{orders-api.bindings.http.url}",
+        "services__orders-api__https__0": "{orders-api.bindings.https.url}",
+        "services__catalog-api__http__0": "{catalog-api.bindings.http.url}",
+        "services__catalog-api__https__0": "{catalog-api.bindings.https.url}",
+        "services__reviews-api__http__0": "{reviews-api.bindings.http.url}",
+        "services__reviews-api__https__0": "{reviews-api.bindings.https.url}",
+        "ConnectionStrings__redis": "{redis.connectionString}",
+        "Jwt__Issuer": "cognitive-shop-auth",
+        "Jwt__Audience": "cognitive-shop",
+        "Jwt__SecretKey": "{jwt-secret.value}",
+        "IdentityServer__Authority": "http://localhost:5100"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "payments-api": {
+      "type": "project.v0",
+      "path": "../Services/Payments/Payments.Api/Payments.Api.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{payments-api.bindings.http.targetPort}",
+        "services__keycloak__http__0": "{keycloak.bindings.http.url}",
+        "services__keycloak__management__0": "{keycloak.bindings.management.url}",
+        "Jwt__Issuer": "cognitive-shop-auth",
+        "Jwt__Audience": "cognitive-shop",
+        "Jwt__SecretKey": "{jwt-secret.value}",
+        "IdentityServer__Authority": "http://localhost:5100"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        }
+      }
+    },
+    "gateway": {
+      "type": "project.v0",
+      "path": "../Platform.ApiGateway/Platform.ApiGateway.csproj",
+      "env": {
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EXCEPTION_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_EMIT_EVENT_LOG_ATTRIBUTES": "true",
+        "OTEL_DOTNET_EXPERIMENTAL_OTLP_RETRY": "in_memory",
+        "ASPNETCORE_FORWARDEDHEADERS_ENABLED": "true",
+        "HTTP_PORTS": "{gateway.bindings.http.targetPort};{gateway.bindings.public.targetPort}",
+        "services__orders-api__http__0": "{orders-api.bindings.http.url}",
+        "services__orders-api__https__0": "{orders-api.bindings.https.url}",
+        "services__catalog-api__http__0": "{catalog-api.bindings.http.url}",
+        "services__catalog-api__https__0": "{catalog-api.bindings.https.url}",
+        "services__reviews-api__http__0": "{reviews-api.bindings.http.url}",
+        "services__reviews-api__https__0": "{reviews-api.bindings.https.url}",
+        "services__aggregator__http__0": "{aggregator.bindings.http.url}",
+        "services__aggregator__https__0": "{aggregator.bindings.https.url}",
+        "services__auth-api__http__0": "{auth-api.bindings.http.url}",
+        "services__auth-api__https__0": "{auth-api.bindings.https.url}",
+        "Jwt__Issuer": "cognitive-shop-auth",
+        "Jwt__Audience": "cognitive-shop",
+        "Jwt__SecretKey": "{jwt-secret.value}",
+        "IdentityServer__Authority": "http://localhost:5100",
+        "services__keycloak__http__0": "{keycloak.bindings.http.url}",
+        "services__keycloak__management__0": "{keycloak.bindings.management.url}",
+        "services__payments-api__http__0": "{payments-api.bindings.http.url}",
+        "services__payments-api__https__0": "{payments-api.bindings.https.url}"
+      },
+      "bindings": {
+        "http": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "https": {
+          "scheme": "https",
+          "protocol": "tcp",
+          "transport": "http"
+        },
+        "public": {
+          "scheme": "http",
+          "protocol": "tcp",
+          "transport": "http",
+          "port": 5000,
+          "targetPort": 8000
+        }
+      }
+    },
+    "mongo-password": {
+      "type": "parameter.v0",
+      "value": "{mongo-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true,
+          "default": {
+            "generate": {
+              "minLength": 22,
+              "special": false
+            }
+          }
+        }
+      }
+    },
+    "redis-password": {
+      "type": "parameter.v0",
+      "value": "{redis-password.inputs.value}",
+      "inputs": {
+        "value": {
+          "type": "string",
+          "secret": true,
+          "default": {
+            "generate": {
+              "minLength": 22,
+              "special": false
+            }
+          }
+        }
+      }
+    }
+  }
+}
