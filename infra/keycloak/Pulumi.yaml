@@ -1,0 +1,7 @@
+name: keycloak-infra
+description: Keycloak realm for cognitive-shop
+runtime: dotnet
+config:
+  pulumi:tags:
+    value:
+      pulumi:template: csharp

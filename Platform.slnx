@@ -5,6 +5,9 @@
     <Platform Name="x86" />
   </Configurations>
   <Folder Name="/Services/" />
+  <Folder Name="/Services/Auth/">
+    <Project Path="Services/Auth/Auth.Api/Auth.Api.csproj" />
+  </Folder>
   <Folder Name="/Services/Catalog/">
     <Project Path="Services/Catalog/Catalog.Api/Catalog.Api.csproj" />
     <Project Path="Services/Catalog/Catalog.Bll/Catalog.Bll.csproj" />
@@ -17,6 +20,9 @@
     <Project Path="Services/Orders/Orders.Dal/Orders.Dal.csproj" />
     <Project Path="Services/Orders/Orders.Domain/Orders.Domain.csproj" />
   </Folder>
+  <Folder Name="/Services/Payments/">
+    <Project Path="Services/Payments/Payments.Api/Payments.Api.csproj" />
+  </Folder>
   <Folder Name="/Services/Reviews/">
     <Project Path="Services/Reviews/Reviews.Application/Reviews.Application.csproj" />
     <Project Path="Services/Reviews/Reviews.Domain/Reviews.Domain.csproj" />
@@ -28,5 +34,6 @@
   <Project Path="Platform.ApiGateway/Platform.ApiGateway.csproj" />
   <Project Path="Platform.AppHost/Platform.AppHost.csproj" />
   <Project Path="Platform.EventBus/Platform.EventBus.csproj" />
+  <Project Path="Platform.IdentityServer/Platform.IdentityServer.csproj" />
   <Project Path="Platform.ServiceDefaults/Platform.ServiceDefaults.csproj" />
 </Solution>

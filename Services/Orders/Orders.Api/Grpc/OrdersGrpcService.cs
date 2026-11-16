@@ -1,3 +1,5 @@
+using Platform.ServiceDefaults.Authorization;
+using Microsoft.AspNetCore.Authorization;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Orders.Bll.Dtos;
@@ -10,6 +12,7 @@ using System.Diagnostics;
 namespace Orders.Api.GrpcServices;
 
 /// <summary>gRPC-адаптер над IOrderService.</summary>
+[RequirePermission("orders:read")]
 public class OrdersGrpcService(IOrderService orders) : OrdersService.OrdersServiceBase
 {
     public override async Task<OrderReply> GetOrder(GetOrderRequest request, ServerCallContext context)
