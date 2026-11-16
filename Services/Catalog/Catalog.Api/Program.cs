@@ -21,10 +21,28 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
-// Лаб. 09, Ч.1: кожен сервіс валідує JWT сам (той самий issuer, audience і ключ), без звернення до Auth Service
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o => o.TokenValidationParameters = AuthSchemes.OwnJwtParameters(builder.Configuration));
-builder.Services.AddAuthorization();
+// Лаб. 09, Ч.2: приймаємо і власний JWT (Ч.1), і токени IdentityServer (Ч.2); схему обирає політика-схема за issuer
+builder.Services.AddAuthentication(o =>
+{
+    o.DefaultScheme = AuthSchemes.Multi;
+    o.DefaultChallengeScheme = AuthSchemes.Multi;
+})
+.AddPolicyScheme(AuthSchemes.Multi, "Own JWT or IdentityServer",
+    o => o.ForwardDefaultSelector = ctx => AuthSchemes.SelectByIssuer(ctx, builder.Configuration))
+.AddJwtBearer(AuthSchemes.OwnJwt,
+    o => o.TokenValidationParameters = AuthSchemes.OwnJwtParameters(builder.Configuration))
+.AddJwtBearer(AuthSchemes.IdentityServer, o =>
+{
+    o.Authority = builder.Configuration["IdentityServer:Authority"];   // ключі підпису з /.well-known/openid-configuration
+    o.Audience = "products_api";                                       // ApiResource цього сервісу
+    o.RequireHttpsMetadata = false;                                    // розробка: IdentityServer на HTTP
+});
+
+// Scope-based політики: дозвіл дає scope з токена IdentityServer або токен власного Auth Service
+var ownIssuer = builder.Configuration["Jwt:Issuer"];
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("products.read", p => p.RequireAssertion(c => c.User.HasScopeOrOwnJwt("products.read", ownIssuer)))
+    .AddPolicy("products.write", p => p.RequireAssertion(c => c.User.HasScopeOrOwnJwt("products.write", ownIssuer)));
 
 builder.AddRabbitMQClient("messaging", s => s.DisableTracing = true);   // IConnection (singleton) + health check; трасування брокера робимо вручну (Частина 4)
 builder.Services.AddEventBusTopology();

@@ -29,6 +29,7 @@ var orders = builder.AddProject<Projects.Orders_Api>("orders-api")
     .WithReference(redis).WaitFor(redis)
     .WithReference(rabbit).WaitFor(rabbit)
     .WithOwnJwt(jwtSecret)
+    .WithIdentityServerAuthority()
     .WithHttpHealthCheck("/health/ready");
 
 var catalog = builder.AddProject<Projects.Catalog_Api>("catalog-api")
@@ -36,6 +37,7 @@ var catalog = builder.AddProject<Projects.Catalog_Api>("catalog-api")
     .WithReference(redis).WaitFor(redis)
     .WithReference(rabbit).WaitFor(rabbit)
     .WithOwnJwt(jwtSecret)
+    .WithIdentityServerAuthority()
     .WithHttpHealthCheck("/health/ready");
 
 var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
@@ -43,6 +45,7 @@ var reviews = builder.AddProject<Projects.Reviews_WebApi>("reviews-api")
     .WithReference(redis).WaitFor(redis)
     .WithReference(rabbit).WaitFor(rabbit)
     .WithOwnJwt(jwtSecret)
+    .WithIdentityServerAuthority()
     .WithHttpHealthCheck("/health/ready");
 
 // Ырс. 09, з.1: Auth Service (ASP.NET Identity + JWT)
@@ -66,6 +69,8 @@ var aggregator = builder.AddProject<Projects.Platform_Aggregator>("aggregator")
     .WithReference(redis)
     .WaitFor(orders).WaitFor(catalog).WaitFor(reviews).WaitFor(redis)
     .WithOwnJwt(jwtSecret)
+    .WithIdentityServerAuthority()
+    .WaitFor(identityServer)
     .WithHttpHealthCheck("/health/ready");
 
 builder.AddProject<Projects.Platform_ApiGateway>("gateway")
@@ -75,6 +80,7 @@ builder.AddProject<Projects.Platform_ApiGateway>("gateway")
     .WithReference(auth).WaitFor(auth)
     .WaitFor(aggregator)
     .WithOwnJwt(jwtSecret)
+    .WithIdentityServerAuthority()
     .WithHttpHealthCheck("/health/ready");
 
 builder.Build().Run();

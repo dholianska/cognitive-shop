@@ -14,6 +14,7 @@ namespace Orders.Api.Controllers;
 public class OrdersController(IOrderService orders, ICustomerService customers, OrderMetrics metrics) : ControllerBase
 {
     /// <summary>Замовлення клієнта: GET /api/orders?customerId=1</summary>
+    [Authorize(Policy = "orders.read")]
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -25,6 +26,7 @@ public class OrdersController(IOrderService orders, ICustomerService customers, 
         return Ok(await metrics.MeasureAsync("get_by_customer", () => orders.GetByCustomerAsync(customerId, ct)));
     }
 
+    [Authorize(Policy = "orders.read")]
     [HttpGet("{id:long}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -35,6 +37,7 @@ public class OrdersController(IOrderService orders, ICustomerService customers, 
         return Ok(order);
     }
 
+    [Authorize(Policy = "orders.write")]
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -48,6 +51,7 @@ public class OrdersController(IOrderService orders, ICustomerService customers, 
     }
 
     /// <summary>Підтвердження: статус -> StockConfirmed і зменшення залишку в одній транзакції.</summary>
+    [Authorize(Policy = "orders.write")]
     [HttpPost("{id:long}/confirm")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -60,6 +64,7 @@ public class OrdersController(IOrderService orders, ICustomerService customers, 
     }
 
     /// <summary>Зміна статусу (Paid, Shipped, Cancelled...); недопустимий перехід дає 409.</summary>
+    [Authorize(Policy = "orders.write")]
     [HttpPut("{id:long}/status")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -72,6 +77,7 @@ public class OrdersController(IOrderService orders, ICustomerService customers, 
         return NoContent();
     }
 
+    [Authorize(Policy = "orders.write")]
     [HttpDelete("{id:long}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

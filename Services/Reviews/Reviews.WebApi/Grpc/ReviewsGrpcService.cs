@@ -12,7 +12,7 @@ using System.Diagnostics;
 namespace Reviews.WebApi.GrpcServices;
 
 /// <summary>gRPC-адаптер над MediatR-запитами Application.</summary>
-[Authorize]
+[Authorize(Policy = "reviews.read")]
 public class ReviewsGrpcService(ISender mediator) : ReviewsService.ReviewsServiceBase
 {
     private const int MaxProducts = 100;

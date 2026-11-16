@@ -11,7 +11,7 @@ using System.Diagnostics;
 namespace Orders.Api.GrpcServices;
 
 /// <summary>gRPC-адаптер над IOrderService.</summary>
-[Authorize]
+[Authorize(Policy = "orders.read")]
 public class OrdersGrpcService(IOrderService orders) : OrdersService.OrdersServiceBase
 {
     public override async Task<OrderReply> GetOrder(GetOrderRequest request, ServerCallContext context)

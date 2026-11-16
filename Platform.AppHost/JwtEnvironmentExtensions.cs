@@ -10,4 +10,8 @@ internal static class JwtEnvironmentExtensions
             .WithEnvironment("Jwt__Issuer", "cognitive-shop-auth")
             .WithEnvironment("Jwt__Audience", "cognitive-shop")
             .WithEnvironment("Jwt__SecretKey", secret);
+
+    public static IResourceBuilder<T> WithIdentityServerAuthority<T>(this IResourceBuilder<T> builder)
+    where T : IResourceWithEnvironment
+    => builder.WithEnvironment("IdentityServer__Authority", "http://localhost:5100");
 }

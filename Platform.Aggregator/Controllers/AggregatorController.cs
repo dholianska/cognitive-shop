@@ -13,6 +13,7 @@ public class AggregatorController(
     OrderAggregationService http) : ControllerBase
 {
     /// <summary>Повна картка замовлення через gRPC (+ кеш Redis 30 с). ?noCache=true для вимірювань.</summary>
+    [Authorize(Policy = "aggregator.read")]
     [HttpGet("orders/{id:long}/full")]
     [ProducesResponseType<FullOrderDto>(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -22,6 +23,7 @@ public class AggregatorController(
         => RunAsync(id, () => grpcCached.GetFullOrderAsync(id, useCache: !noCache, ct));
 
     /// <summary>Те саме через HTTP (Лаб. 05). Лишено для порівняння тривалості HTTP і gRPC.</summary>
+    [Authorize(Policy = "aggregator.read")]
     [HttpGet("orders/{id:long}/full/http")]
     public Task<ActionResult<FullOrderDto>> GetFullOrderHttp(long id, CancellationToken ct = default)
         => RunAsync(id, () => http.GetFullOrderAsync(id, ct));

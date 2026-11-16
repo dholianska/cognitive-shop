@@ -14,18 +14,18 @@ public static class GrpcClientsExtensions
         services.AddGrpcClient<CatalogService.CatalogServiceClient>(o => o.Address = new Uri("https://catalog-api"))
             .ConfigureChannel(c => c.ServiceConfig = RetryConfig(maxAttempts: 4, initialBackoff: 0.5, maxBackoff: 4))
             .AddResilience("catalog-api-grpc", ResiliencePolicies.Critical.ForGrpc())
-            .AddHttpMessageHandler<BearerForwardingHandler>();
+            .AddHttpMessageHandler<ServiceTokenHandler>();
 
         services.AddGrpcClient<OrdersService.OrdersServiceClient>(o => o.Address = new Uri("https://orders-api"))
             .ConfigureChannel(c => c.ServiceConfig = RetryConfig(maxAttempts: 3, initialBackoff: 0.5, maxBackoff: 3))
             .AddResilience("orders-api-grpc", ResiliencePolicies.Critical.ForGrpc())
-            .AddHttpMessageHandler<BearerForwardingHandler>();
+            .AddHttpMessageHandler<ServiceTokenHandler>();
 
         // Некритичний: Відгуки (до 2 спроб, швидко здаємось)
         services.AddGrpcClient<ReviewsService.ReviewsServiceClient>(o => o.Address = new Uri("https://reviews-api"))
             .ConfigureChannel(c => c.ServiceConfig = RetryConfig(maxAttempts: 2, initialBackoff: 0.25, maxBackoff: 1))
             .AddResilience("reviews-api-grpc", ResiliencePolicies.NonCritical.ForGrpc())
-            .AddHttpMessageHandler<BearerForwardingHandler>();
+            .AddHttpMessageHandler<ServiceTokenHandler>();
 
         return services;
     }

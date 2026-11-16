@@ -20,6 +20,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
     /// (items, totalCount, page, pageSize, totalPages, hasNext, hasPrevious)
     /// і дублюються в заголовку X-Total-Count.
     /// </summary>
+    [Authorize(Policy = "products.read")]
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -36,6 +37,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
     }
 
     /// <summary>Товари з малим залишком (друга специфікація).</summary>
+    [Authorize(Policy = "products.read")]
     [HttpGet("low-stock")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -43,6 +45,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         [FromQuery, Range(0, 100000)] int threshold = 10, CancellationToken ct = default)
         => Ok(await metrics.MeasureAsync("low_stock", () => service.GetLowStockAsync(threshold, ct)));
 
+    [Authorize(Policy = "products.read")]
     [HttpGet("{id:int}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -51,6 +54,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
             ? Ok(dto)
             : NotFound();   // не знайдено: 404 (обробник)
 
+    [Authorize(Policy = "products.write")]
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -69,6 +73,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
     }
 
     // прості правила (Range) перевіряє DataAnnotations ще до виклику дії
+    [Authorize(Policy = "products.write")]
     [HttpPut("{id:int}/price")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -80,6 +85,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
+    [Authorize(Policy = "products.write")]
     [HttpPut("{id:int}/name")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -91,6 +97,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
+    [Authorize(Policy = "products.write")]
     [HttpPost("{id:int}/stock/add")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -102,6 +109,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
+    [Authorize(Policy = "products.write")]
     [HttpPost("{id:int}/stock/remove")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -114,6 +122,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
+    [Authorize(Policy = "products.write")]
     [HttpPut("{id:int}/categories/{categoryId:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -125,6 +134,7 @@ public class ProductsController(IProductService service, CatalogMetrics metrics)
         return NoContent();
     }
 
+    [Authorize(Policy = "products.write")]
     [HttpDelete("{id:int}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

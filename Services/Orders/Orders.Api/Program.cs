@@ -12,14 +12,33 @@ using Orders.Api.HealthChecks;
 using Orders.Api.IntegrationEvents;
 using Platform.EventBus;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.OpenApi.Models;
 
 var builder = WebApplication.CreateBuilder(args);
 builder.AddServiceDefaults();
 
-// Лаб. 09, Ч.1: кожен сервіс валідує JWT сам (той самий issuer, audience і ключ), без звернення до Auth Service
-builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
-    .AddJwtBearer(o => o.TokenValidationParameters = AuthSchemes.OwnJwtParameters(builder.Configuration));
-builder.Services.AddAuthorization();
+// Лаб. 09, Ч.2: приймаємо і власний JWT (Ч.1), і токени IdentityServer (Ч.2); схему обирає політика-схема за issuer
+builder.Services.AddAuthentication(o =>
+{
+    o.DefaultScheme = AuthSchemes.Multi;
+    o.DefaultChallengeScheme = AuthSchemes.Multi;
+})
+.AddPolicyScheme(AuthSchemes.Multi, "Own JWT or IdentityServer",
+    o => o.ForwardDefaultSelector = ctx => AuthSchemes.SelectByIssuer(ctx, builder.Configuration))
+.AddJwtBearer(AuthSchemes.OwnJwt,
+    o => o.TokenValidationParameters = AuthSchemes.OwnJwtParameters(builder.Configuration))
+.AddJwtBearer(AuthSchemes.IdentityServer, o =>
+{
+    o.Authority = builder.Configuration["IdentityServer:Authority"];   // ключі підпису з /.well-known/openid-configuration
+    o.Audience = "orders_api";                                         // ApiResource цього сервісу
+    o.RequireHttpsMetadata = false;                                    // розробка: IdentityServer на HTTP
+});
+
+// Scope-based політики: дозвіл дає scope з токена IdentityServer або токен власного Auth Service
+var ownIssuer = builder.Configuration["Jwt:Issuer"];
+builder.Services.AddAuthorizationBuilder()
+    .AddPolicy("orders.read", p => p.RequireAssertion(c => c.User.HasScopeOrOwnJwt("orders.read", ownIssuer)))
+    .AddPolicy("orders.write", p => p.RequireAssertion(c => c.User.HasScopeOrOwnJwt("orders.write", ownIssuer)));
 
 builder.AddRabbitMQClient("messaging", s => s.DisableTracing = true);   // IConnection (singleton) + health check; трасування брокера робимо вручну (Частина 4)
 builder.AddRedisDistributedCache("redis", s => s.DisableHealthChecks = true);   // власну перевірку (Degraded) реєструємо нижче
@@ -66,7 +85,35 @@ builder.Services.AddProblemDetails(o => o.CustomizeProblemDetails = ctx =>
 builder.Services.AddExceptionHandler<DomainExceptionHandler>();
 
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+
+var identityServerAuthority = builder.Configuration["IdentityServer:Authority"];
+builder.Services.AddSwaggerGen(c =>
+{
+    c.AddSecurityDefinition("oauth2", new OpenApiSecurityScheme
+    {
+        Type = SecuritySchemeType.OAuth2,
+        Flows = new OpenApiOAuthFlows
+        {
+            AuthorizationCode = new OpenApiOAuthFlow
+            {
+                AuthorizationUrl = new Uri($"{identityServerAuthority}/connect/authorize"),
+                TokenUrl = new Uri($"{identityServerAuthority}/connect/token"),
+                Scopes = new Dictionary<string, string>
+                {
+                    ["orders.read"] = "Read orders",
+                    ["orders.write"] = "Create and change orders"
+                }
+            }
+        }
+    });
+    c.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        [new OpenApiSecurityScheme
+        {
+            Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "oauth2" }
+        }] = ["orders.read", "orders.write"]
+    });
+});
 
 builder.Services.AddMemoryCache(o =>
 {
@@ -109,7 +156,12 @@ app.UseExceptionHandler();
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-    app.UseSwaggerUI();
+    app.UseSwaggerUI(o =>
+    {
+        o.OAuthClientId("swagger");   // public client: без секрету
+        o.OAuthUsePkce();             // PKCE обов'язковий для public client
+        o.OAuthScopes("orders.read", "orders.write");
+    });
 }
 
 app.UseAuthentication();

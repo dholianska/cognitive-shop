@@ -20,6 +20,7 @@ namespace Reviews.WebApi.Controllers;
 public class ReviewsController(ISender mediator, ReviewMetrics metrics) : ControllerBase
 {
     /// <summary>Список відгуків: GET /api/reviews?productId=1&amp;page=1&amp;pageSize=10 (фільтр і пагінація в MongoDB).</summary>
+    [Authorize(Policy = "reviews.read")]
     [HttpGet]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -30,6 +31,7 @@ public class ReviewsController(ISender mediator, ReviewMetrics metrics) : Contro
             () => mediator.Send(new GetReviewsListQuery(productId, page, pageSize), ct)));
 
     /// <summary>Відгук за Id. Версія документа повертається в заголовку ETag (для If-Match).</summary>
+    [Authorize(Policy = "reviews.read")]
     [HttpGet("{id}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -42,6 +44,7 @@ public class ReviewsController(ISender mediator, ReviewMetrics metrics) : Contro
     }
 
     /// <summary>Створення відгуку. 201 із Location, де в адресі рядковий ObjectId.</summary>
+    [Authorize(Policy = "reviews.write")]
     [HttpPost]
     [ProducesResponseType(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -57,6 +60,7 @@ public class ReviewsController(ISender mediator, ReviewMetrics metrics) : Contro
     /// Оновлення відгуку. Заголовок If-Match (версія з ETag) необов'язковий: якщо він є і документ
     /// уже змінили, повертається 409.
     /// </summary>
+    [Authorize(Policy = "reviews.write")]
     [HttpPut("{id}")]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -84,6 +88,7 @@ public class ReviewsController(ISender mediator, ReviewMetrics metrics) : Contro
         return Ok(updated);
     }
 
+    [Authorize(Policy = "reviews.write")]
     [HttpDelete("{id}")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
@@ -96,6 +101,7 @@ public class ReviewsController(ISender mediator, ReviewMetrics metrics) : Contro
     }
 
     /// <summary>Додає коментар у вкладений масив відгуку.</summary>
+    [Authorize(Policy = "reviews.write")]
     [HttpPost("{id}/comments")]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
